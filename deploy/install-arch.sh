@@ -229,8 +229,11 @@ print_separator "Installing Playwright Browsers"
 echo -e "  ${YELLOW}⚠️${NC}  This step may take several minutes..."
 
 # Install system dependencies manually for Arch Linux
+# Playwright's --with-deps only works on Debian/Ubuntu, so we handle Arch packages manually
 echo -e "  ${YELLOW}▶${NC} Installing system dependencies for Playwright browsers..."
-PLAYWRIGHT_DEPS=("xvfb" "mesa" "nss" "nspr" "libxss" "libevent" "fontconfig" "freetype2" "libxrandr" "libxdamage" "libxcomposite" "libxfixes" "at-spi2-core")
+# Complete list of Arch packages needed for Chromium, Firefox, and WebKit browsers
+# Based on community testing and Microsoft's Playwright requirements for Linux
+PLAYWRIGHT_DEPS=("nss" "nspr" "at-spi2-core" "libcups" "libdrm" "dbus" "libx11" "libxcomposite" "libxdamage" "libxext" "libxfixes" "libxrandr" "libxcb" "libxkbcommon" "mesa" "pango" "cairo" "alsa-lib" "fontconfig" "freetype2" "libxss" "libevent" "xorg-server-xvfb")
 MISSING_DEPS=()
 
 for dep in "${PLAYWRIGHT_DEPS[@]}"; do
@@ -247,7 +250,8 @@ else
 fi
 
 # Install browsers without system dependencies (since we handled them above)
-run_command "npx playwright install" "Installing Playwright browsers (Chrome, Firefox, Safari)"
+# Note: We do NOT use --with-deps because that tries to use apt-get on Arch Linux
+run_command "npx playwright install" "Installing Playwright browsers (Chromium, Firefox, WebKit)"
 
 print_step "Setting up configuration..."
 
