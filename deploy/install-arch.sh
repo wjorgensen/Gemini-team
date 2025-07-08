@@ -162,13 +162,21 @@ fi
 
 print_step "Installing project dependencies..."
 
-cd "$APP_DIR"
+# Store the repository directory (current directory)
+REPO_DIR="$(pwd)"
 
-# Ensure we have the project files
+# Ensure we have the project files in the repository
 if [ ! -f "package.json" ]; then
     print_error "package.json not found. Make sure you're running this from the cloned repository."
     exit 1
 fi
+
+# Copy repository files to application directory
+echo "Copying project files to $APP_DIR..."
+cp -r "$REPO_DIR"/* "$APP_DIR/"
+cp -r "$REPO_DIR"/.* "$APP_DIR/" 2>/dev/null || true  # Copy hidden files, ignore errors
+
+cd "$APP_DIR"
 
 # Install Node.js dependencies
 echo "Installing Node.js project dependencies..."
