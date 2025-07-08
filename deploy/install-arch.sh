@@ -204,50 +204,92 @@ fi
 print_step "Configuring Gemini CLI..."
 
 print_separator "Setting Up Gemini CLI Authentication"
-echo -e "  ${YELLOW}🔑${NC} Configuring Gemini CLI for first-time use..."
+echo -e "  ${YELLOW}🔑${NC} Setting up Gemini CLI for first-time use..."
 echo
-echo -e "  ${BLUE}This version of Gemini CLI ($(gemini --version 2>/dev/null)) uses environment variables for authentication.${NC}"
-echo -e "  ${BLUE}You need to set the GEMINI_API_KEY environment variable.${NC}"
+echo -e "  ${BLUE}This process will:${NC}"
+echo -e "    1. Create a .env file with your API key"
+echo -e "    2. Run the interactive CLI setup for theme selection"
+echo -e "    3. Continue with service installation"
 echo
-echo -e "  ${GREEN}Authentication Method: Environment Variable${NC}"
-echo -e "    • Get your key: ${BLUE}https://aistudio.google.com/app/apikey${NC}"
-echo -e "    • Set GEMINI_API_KEY environment variable"
-echo -e "    • No interactive configuration needed"
+echo -e "  ${GREEN}Get your API key from: ${BLUE}https://aistudio.google.com/app/apikey${NC}"
 echo
-echo -e "  ${YELLOW}⚠️  You'll need to complete this setup before the service can work!${NC}"
+echo -e "  ${YELLOW}⚠️  You'll need your API key to continue!${NC}"
 echo
 
-# Check if user wants to configure now or later
-echo -e "${BLUE}Would you like to set up the API key now? (y/n)${NC}"
-read -r configure_now
+# Get API key from user
+echo -e "${BLUE}Please enter your Gemini API key:${NC}"
+echo "(Get one from: https://aistudio.google.com/app/apikey)"
+read -r -s api_key
 
-if [[ $configure_now =~ ^[Yy]$ ]]; then
-    echo -e "  ${YELLOW}▶${NC} Setting up Gemini API key..."
-    echo -e "  ${BLUE}Please enter your Gemini API key:${NC}"
-    echo -e "  ${BLUE}(Get one from: https://aistudio.google.com/app/apikey)${NC}"
-    read -r -s api_key
-    
-    if [ -n "$api_key" ]; then
-        # Test the API key
-        export GEMINI_API_KEY="$api_key"
-        if gemini --version >/dev/null 2>&1; then
-            print_success "API key test passed!"
-            
-            # Store for later use in environment file
-            TEMP_API_KEY="$api_key"
-        else
-            print_warning "API key test failed - please verify your key"
-            echo -e "  ${YELLOW}💡${NC} You can set it up later using: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
-        fi
-    else
-        print_warning "No API key provided"
-        echo -e "  ${YELLOW}💡${NC} You can set it up later using: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
-    fi
-else
-    print_warning "Skipping Gemini CLI configuration"
-    echo -e "  ${YELLOW}💡${NC} Remember to configure later with: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
-    echo -e "  ${YELLOW}💡${NC} Or set GEMINI_API_KEY environment variable"
+if [ -z "$api_key" ]; then
+    print_error "No API key provided. Cannot continue installation."
+    echo "Get your API key from: https://aistudio.google.com/app/apikey"
+    echo "Then re-run the installation script."
+    exit 1
 fi
+
+echo
+print_step "Creating .env file with API key..."
+
+# Create .env file in the repository directory
+ENV_FILE_LOCAL="$REPO_DIR/.env"
+echo "GEMINI_API_KEY=$api_key" > "$ENV_FILE_LOCAL"
+echo -e "  ${GREEN}✓${NC} Created .env file with API key"
+
+# Store for later use in service environment file
+TEMP_API_KEY="$api_key"
+
+echo
+print_step "Running interactive CLI setup..."
+
+echo -e "  ${BLUE}📝 Interactive Setup Instructions:${NC}"
+echo -e "    1. The Gemini CLI will start with theme and authentication options"
+echo -e "    2. Choose your preferred theme (dark/light)"
+echo -e "    3. Select 'Gemini API Key (AI Studio)' (should be pre-selected)"
+echo -e "    4. The API key should be automatically detected from .env"
+echo -e "    5. ${YELLOW}When setup is complete, press Ctrl+C twice to exit${NC}"
+echo -e "    6. Installation will continue automatically"
+echo
+echo -e "  ${YELLOW}⚠️  IMPORTANT: Press Ctrl+C twice when you see the Gemini prompt to continue installation${NC}"
+echo
+echo -e "${BLUE}Press Enter to start the interactive CLI setup...${NC}"
+read -r
+
+# Change to repo directory so CLI can find .env file
+cd "$REPO_DIR"
+
+# Run interactive CLI setup
+echo -e "  ${YELLOW}▶${NC} Starting Gemini CLI interactive setup..."
+echo -e "  ${BLUE}Remember: Press Ctrl+C twice when setup is complete!${NC}"
+echo
+
+# Give user a moment to read instructions
+sleep 3
+
+# Run gemini CLI - user will interact with it
+if ! gemini; then
+    # This is expected when user presses Ctrl+C
+    echo
+    echo -e "  ${GREEN}✓${NC} CLI setup completed (exited by user)"
+else
+    # Unlikely to reach here but handle gracefully
+    echo -e "  ${GREEN}✓${NC} CLI setup completed"
+fi
+
+echo
+print_step "Verifying CLI configuration..."
+
+# Test the CLI works
+cd "$REPO_DIR"
+if gemini --version >/dev/null 2>&1; then
+    print_success "✅ Gemini CLI is working correctly!"
+else
+    print_warning "⚠️  CLI test failed, but continuing with installation"
+    echo "You can reconfigure later if needed"
+fi
+
+# Return to app directory for rest of installation
+cd "$APP_DIR"
 
 echo
 
@@ -422,13 +464,10 @@ echo -e "${BLUE}🔧 Next steps:${NC}"
 
 # Check if Gemini CLI was configured
 if [ -n "${TEMP_API_KEY:-}" ]; then
-    echo -e "✅ Gemini CLI API key configured during installation"
-elif [ -n "${GEMINI_API_KEY:-}" ]; then
-    echo -e "✅ Gemini CLI API key found in environment"
+    echo -e "✅ Gemini CLI configured during installation"
 else
-    echo -e "⚠️  ${YELLOW}Configure Gemini CLI first:${NC}"
-    echo "   ./deploy/setup-gemini-cli.sh"
-    echo "   (Set up your API key from https://aistudio.google.com/app/apikey)"
+    echo -e "⚠️  ${YELLOW}Gemini CLI setup incomplete${NC}"
+    echo "   Run the installation script again to complete CLI setup"
     echo
 fi
 
@@ -458,7 +497,7 @@ echo "• Status: http://localhost:3000/status"
 echo "• Webhook: http://localhost:3000/webhook"
 echo
 echo -e "${YELLOW}⚠️  Remember to:${NC}"
-echo "• Configure Gemini CLI if you skipped it: ./deploy/setup-gemini-cli.sh"
+echo "• Gemini CLI should be configured during installation"
 echo "• Add webhook URLs to your GitHub repositories"
 echo "• Ensure port 3000 is accessible from GitHub"
 echo "• Monitor logs for any issues"

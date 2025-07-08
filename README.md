@@ -49,39 +49,31 @@ chmod +x deploy/install-arch.sh
 ./deploy/install-arch.sh
 ```
 
-### 3. Configure Gemini CLI
+### 3. Installation Process
 
-The Gemini CLI needs authentication setup before the service can work. You have two options:
+The installation script will guide you through:
+1. **API Key Setup**: You'll be prompted for your Gemini API key
+2. **Interactive CLI Setup**: Choose your theme and confirm authentication  
+3. **Service Configuration**: Automatic setup of the background service
 
-**Option A: Interactive Setup (Recommended)**
-```bash
-# Run the CLI configuration helper
-chmod +x deploy/setup-gemini-cli.sh
-./deploy/setup-gemini-cli.sh
-```
+**Get your API key first:** https://aistudio.google.com/app/apikey
 
-**Option B: Manual Setup**
-```bash
-# Configure the CLI interactively
-gemini configure
-
-# When prompted:
-# 1. Choose "Gemini API Key (AI Studio)"
-# 2. Get your key from: https://aistudio.google.com/app/apikey
-# 3. Paste your API key
-# 4. Test with: gemini --version
-```
+During installation, you'll see the interactive CLI interface - follow these steps:
+- Choose your preferred theme (dark/light)
+- Select "Gemini API Key (AI Studio)" (should be pre-selected)
+- **Press Ctrl+C twice when setup is complete** to continue installation
 
 ### 4. Service Configuration
 
-Edit the environment configuration:
+The installation script automatically configures your Gemini API key. You just need to add your GitHub token:
+
 ```bash
 sudo nano /etc/gemini-coding-factory/environment
 ```
 
-Add your API keys:
+Add your GitHub token and optional settings:
 ```bash
-GEMINI_API_KEY=your_gemini_api_key_here
+# GEMINI_API_KEY is already set during installation
 GITHUB_TOKEN=your_github_token_here
 WEBHOOK_SECRET=your_webhook_secret_here
 AUTHORIZED_USERS=wjorgensen
@@ -164,9 +156,9 @@ ngrok http 3000
 
 | Problem | Solution |
 |---------|----------|
-| ❌ `GEMINI_API_KEY environment variable not found` | Run `gemini configure` or `./deploy/setup-gemini-cli.sh` |
+| ❌ `GEMINI_API_KEY environment variable not found` | Re-run installation script for complete setup |
 | ❌ `gemini: command not found` | Install CLI: `sudo npm install -g @google/gemini-cli` |
-| ❌ Authentication errors | Reconfigure: `gemini configure --reset` |
+| ❌ Authentication errors | Check .env file has correct API key |
 | ❌ API key invalid | Get new key from https://aistudio.google.com/app/apikey |
 
 #### **Webhook Issues**
@@ -482,11 +474,9 @@ npm run test:e2e:debug
 
 **Gemini CLI not configured**
 ```bash
-# Option 1: Use helper script
-./deploy/setup-gemini-cli.sh
-
-# Option 2: Manual configuration
-gemini configure
+# Re-run the installation script
+./deploy/install-arch.sh
+# The script includes interactive CLI setup
 ```
 
 **Gemini CLI not found**
@@ -496,11 +486,11 @@ sudo npm install -g @google/gemini-cli
 
 **Environment variable not found error**
 ```bash
-# Configure CLI authentication
-gemini configure
+# Check .env file exists in project directory
+cat .env
 
-# Or set environment globally
-export GEMINI_API_KEY=your_key_here
+# If missing, re-run installation
+./deploy/install-arch.sh
 ```
 
 **Playwright browsers missing**
