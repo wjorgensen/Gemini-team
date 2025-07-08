@@ -54,6 +54,45 @@ print_success() {
     echo -e "${GREEN}✅${NC} $1"
 }
 
+print_separator() {
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}$(printf '━%.0s' {1..60})${NC}"
+}
+
+run_command() {
+    local cmd="$1"
+    local description="$2"
+    echo -e "  ${YELLOW}▶${NC} $description"
+    echo -e "  ${BLUE}Command:${NC} $cmd"
+    echo -e "  ${BLUE}$(printf '─%.0s' {1..50})${NC}"
+    
+    # Run the command and capture output
+    if eval "$cmd"; then
+        echo -e "  ${GREEN}$(printf '─%.0s' {1..50})${NC}"
+        echo -e "  ${GREEN}✓${NC} $description completed successfully"
+        echo
+    else
+        echo -e "  ${RED}$(printf '─%.0s' {1..50})${NC}"
+        echo -e "  ${RED}✗${NC} $description failed"
+        return 1
+    fi
+}
+
+run_quiet_command() {
+    local cmd="$1"
+    local description="$2"
+    echo -e "  ${YELLOW}▶${NC} $description"
+    
+    # Run the command quietly and capture output
+    if eval "$cmd" >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} $description completed successfully"
+        echo
+    else
+        echo -e "  ${RED}✗${NC} $description failed"
+        return 1
+    fi
+}
+
 # Check if Arch Linux
 if ! command -v pacman &> /dev/null; then
     print_error "This script is designed for Arch Linux"
@@ -76,6 +115,7 @@ if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
     print_warning "Missing required commands: ${MISSING_COMMANDS[*]}"
     print_step "Installing missing dependencies with pacman..."
     
+    print_separator "Installing System Packages"
     # Install missing packages automatically
     PACKAGES_TO_INSTALL=()
     for cmd in "${MISSING_COMMANDS[@]}"; do
@@ -89,8 +129,8 @@ if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
     done
     
     if [ ${#PACKAGES_TO_INSTALL[@]} -ne 0 ]; then
-        echo "Installing packages: ${PACKAGES_TO_INSTALL[*]}"
-        sudo pacman -S --needed --noconfirm "${PACKAGES_TO_INSTALL[@]}"
+        echo -e "  ${YELLOW}📦${NC} Installing packages: ${PACKAGES_TO_INSTALL[*]}"
+        run_command "sudo pacman -S --needed --noconfirm ${PACKAGES_TO_INSTALL[*]}" "Installing system dependencies"
         print_success "Packages installed successfully"
     fi
 fi
@@ -99,22 +139,24 @@ fi
 if command -v docker &> /dev/null; then
     print_step "Setting up Docker service..."
     
+    print_separator "Configuring Docker Service"
     if ! systemctl is-active --quiet docker; then
-        echo "Starting Docker service..."
-        sudo systemctl start docker
+        run_command "sudo systemctl start docker" "Starting Docker service"
         print_success "Docker service started"
+    else
+        echo -e "  ${GREEN}✓${NC} Docker service already running"
     fi
     
     if ! systemctl is-enabled --quiet docker; then
-        echo "Enabling Docker service for auto-start..."
-        sudo systemctl enable docker
+        run_command "sudo systemctl enable docker" "Enabling Docker service for auto-start"
         print_success "Docker service enabled"
+    else
+        echo -e "  ${GREEN}✓${NC} Docker service already enabled"
     fi
     
     # Add user to docker group if not already a member
     if ! groups "$SERVICE_USER" | grep -q docker; then
-        echo "Adding $SERVICE_USER to docker group..."
-        sudo usermod -aG docker "$SERVICE_USER"
+        run_command "sudo usermod -aG docker '$SERVICE_USER'" "Adding $SERVICE_USER to docker group"
         print_warning "Docker group added. You may need to log out and back in for group changes to take effect"
         print_warning "Or run: newgrp docker"
     else
@@ -124,38 +166,37 @@ fi
 
 print_step "Setting up directories..."
 
+print_separator "Creating System Directories"
 # Create application directory
 if [ ! -d "$APP_DIR" ]; then
-    mkdir -p "$APP_DIR"
-    echo "Created application directory: $APP_DIR"
+    run_quiet_command "mkdir -p '$APP_DIR'" "Creating application directory: $APP_DIR"
 fi
 
 # Create workspace directory
 if [ ! -d "$WORKSPACE_DIR" ]; then
-    mkdir -p "$WORKSPACE_DIR"
-    echo "Created workspace directory: $WORKSPACE_DIR"
+    run_quiet_command "mkdir -p '$WORKSPACE_DIR'" "Creating workspace directory: $WORKSPACE_DIR"
 fi
 
 # Create log directory (requires sudo)
 if [ ! -d "$LOG_DIR" ]; then
-    echo "Creating log directory (requires sudo): $LOG_DIR"
-    sudo mkdir -p "$LOG_DIR"
-    sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$LOG_DIR"
+    run_command "sudo mkdir -p '$LOG_DIR'" "Creating log directory: $LOG_DIR"
+    run_quiet_command "sudo chown '$SERVICE_USER:$SERVICE_GROUP' '$LOG_DIR'" "Setting log directory ownership"
 fi
 
 print_step "Installing Gemini CLI..."
 
 # Install Gemini CLI globally with proper permissions
 if ! command -v gemini &> /dev/null; then
-    echo "Installing Gemini CLI globally..."
-    sudo npm install -g @google/genai
+    print_separator "Installing Gemini CLI"
+    run_command "sudo npm install -g @google/genai" "Installing @google/genai package globally"
     print_success "Gemini CLI installed successfully"
 else
     echo "Gemini CLI already installed"
     # Check if it's the right package
     if ! npm list -g @google/genai &> /dev/null; then
         print_warning "Found 'gemini' command but not the correct package. Installing @google/genai..."
-        sudo npm install -g @google/genai
+        print_separator "Updating Gemini CLI"
+        run_command "sudo npm install -g @google/genai" "Installing correct @google/genai package"
         print_success "Correct Gemini package installed"
     fi
 fi
@@ -172,32 +213,34 @@ if [ ! -f "package.json" ]; then
 fi
 
 # Copy repository files to application directory
-echo "Copying project files to $APP_DIR..."
-cp -r "$REPO_DIR"/* "$APP_DIR/"
-cp -r "$REPO_DIR"/.* "$APP_DIR/" 2>/dev/null || true  # Copy hidden files, ignore errors
+echo "📂 Copying project files to $APP_DIR..."
+run_quiet_command "cp -r '$REPO_DIR'/* '$APP_DIR/'" "Copying main project files"
+run_quiet_command "cp -r '$REPO_DIR'/.* '$APP_DIR/' 2>/dev/null || true" "Copying hidden files"
 
 cd "$APP_DIR"
 
-# Install Node.js dependencies
-echo "Installing Node.js project dependencies..."
-npm install --production
+print_separator "Installing Node.js Dependencies"
+run_command "npm install" "Installing dependencies and building project (this includes TypeScript compilation)"
 
-# Install Playwright browsers with dependencies
-echo "Installing Playwright browsers (this may take a while)..."
-npx playwright install --with-deps
+print_separator "Cleaning Up Development Dependencies"
+run_command "npm prune --production" "Removing development dependencies for production"
+
+print_separator "Installing Playwright Browsers"
+echo -e "  ${YELLOW}⚠️${NC}  This step may take several minutes..."
+run_command "npx playwright install --with-deps" "Installing Playwright browsers and system dependencies"
 
 print_step "Setting up configuration..."
 
+print_separator "Creating Configuration Files"
 # Create config directory (requires sudo)
 if [ ! -d "$CONFIG_DIR" ]; then
-    echo "Creating config directory (requires sudo): $CONFIG_DIR"
-    sudo mkdir -p "$CONFIG_DIR"
+    run_command "sudo mkdir -p '$CONFIG_DIR'" "Creating configuration directory: $CONFIG_DIR"
 fi
 
 # Create environment file template
 ENV_FILE="$CONFIG_DIR/environment"
 if [ ! -f "$ENV_FILE" ]; then
-    echo "Creating environment configuration file..."
+    echo -e "  ${YELLOW}▶${NC} Creating environment configuration template..."
     sudo tee "$ENV_FILE" > /dev/null << EOL
 # Gemini Coding Factory Environment Configuration
 # Edit this file with your actual values
@@ -226,25 +269,29 @@ CORS_ORIGINS=*
 # Optional: Log level (debug, info, warn, error)
 # LOG_LEVEL=info
 EOL
-    sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$ENV_FILE"
-    sudo chmod 600 "$ENV_FILE"
-    
+    run_quiet_command "sudo chown '$SERVICE_USER:$SERVICE_GROUP' '$ENV_FILE'" "Setting file ownership"
+    run_quiet_command "sudo chmod 600 '$ENV_FILE'" "Setting secure file permissions"
+    echo -e "  ${GREEN}✓${NC} Environment configuration template created"
+    echo
     print_warning "⚠️  IMPORTANT: Edit $ENV_FILE with your actual API keys!"
 fi
 
 print_step "Setting up systemd service..."
 
+print_separator "Installing Systemd Service"
 # Copy systemd service file
 SERVICE_FILE="/etc/systemd/system/gemini-coding-factory.service"
-sudo cp "deploy/systemd/gemini-coding-factory.service" "$SERVICE_FILE"
+run_command "sudo cp 'deploy/systemd/gemini-coding-factory.service' '$SERVICE_FILE'" "Installing systemd service file"
 
 # Reload systemd
-sudo systemctl daemon-reload
+run_command "sudo systemctl daemon-reload" "Reloading systemd configuration"
 
 print_step "Setting up log rotation..."
 
+print_separator "Configuring Log Rotation"
 # Create logrotate configuration
 LOGROTATE_FILE="/etc/logrotate.d/gemini-coding-factory"
+echo -e "  ${YELLOW}▶${NC} Creating logrotate configuration..."
 sudo tee "$LOGROTATE_FILE" > /dev/null << EOL
 $LOG_DIR/*.log {
     daily
@@ -259,30 +306,33 @@ $LOG_DIR/*.log {
     endscript
 }
 EOL
-
-print_step "Building the application..."
-
-# Build TypeScript
-echo "Compiling TypeScript..."
-npm run build
+echo -e "  ${GREEN}✓${NC} Log rotation configured"
+echo
 
 print_step "Testing the installation..."
 
 # Test that the application can start
-echo "Testing application startup..."
-timeout 10s npm run start:dev || {
+print_separator "Application Startup Test"
+echo -e "  ${YELLOW}ℹ️${NC}  Running a 10-second startup test..."
+if timeout 10s npm run start:dev >/dev/null 2>&1; then
+    print_success "Application startup test completed successfully"
+else
     print_warning "Startup test timed out (this is normal during first run)"
-}
+fi
 
 print_step "Setting up firewall rules (if UFW is enabled)..."
 
 if command -v ufw &> /dev/null && sudo ufw status | grep -q "Status: active"; then
+    print_separator "Configuring UFW Firewall"
     print_warning "UFW firewall is active. Opening port 3000..."
-    sudo ufw allow 3000/tcp
+    run_command "sudo ufw allow 3000/tcp" "Opening port 3000 for HTTP traffic"
     print_success "Port 3000 opened in firewall"
+else
+    echo -e "  ${BLUE}ℹ️${NC}  UFW firewall not active or not installed"
 fi
 
 echo
+print_separator "🎉 Installation Complete!"
 echo -e "${GREEN}✅ Installation completed successfully!${NC}"
 echo
 echo -e "${BLUE}🔧 Next steps:${NC}"
