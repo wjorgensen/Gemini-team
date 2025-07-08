@@ -227,7 +227,27 @@ run_command "npm prune --production" "Removing development dependencies for prod
 
 print_separator "Installing Playwright Browsers"
 echo -e "  ${YELLOW}⚠️${NC}  This step may take several minutes..."
-run_command "npx playwright install --with-deps" "Installing Playwright browsers and system dependencies"
+
+# Install system dependencies manually for Arch Linux
+echo -e "  ${YELLOW}▶${NC} Installing system dependencies for Playwright browsers..."
+PLAYWRIGHT_DEPS=("xvfb" "mesa" "nss" "nspr" "libxss" "libevent" "fontconfig" "freetype2" "libxrandr" "libxdamage" "libxcomposite" "libxfixes" "at-spi2-core")
+MISSING_DEPS=()
+
+for dep in "${PLAYWRIGHT_DEPS[@]}"; do
+    if ! pacman -Qi "$dep" &> /dev/null; then
+        MISSING_DEPS+=("$dep")
+    fi
+done
+
+if [ ${#MISSING_DEPS[@]} -ne 0 ]; then
+    echo -e "  ${BLUE}📦${NC} Installing missing Playwright dependencies: ${MISSING_DEPS[*]}"
+    run_command "sudo pacman -S --needed --noconfirm ${MISSING_DEPS[*]}" "Installing Playwright system dependencies"
+else
+    echo -e "  ${GREEN}✓${NC} All Playwright system dependencies already installed"
+fi
+
+# Install browsers without system dependencies (since we handled them above)
+run_command "npx playwright install" "Installing Playwright browsers (Chrome, Firefox, Safari)"
 
 print_step "Setting up configuration..."
 
