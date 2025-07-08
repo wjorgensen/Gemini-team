@@ -188,18 +188,68 @@ print_step "Installing Gemini CLI..."
 # Install Gemini CLI globally with proper permissions
 if ! command -v gemini &> /dev/null; then
     print_separator "Installing Gemini CLI"
-    run_command "sudo npm install -g @google/genai" "Installing @google/genai package globally"
+    run_command "sudo npm install -g @google/gemini-cli" "Installing @google/gemini-cli package globally"
     print_success "Gemini CLI installed successfully"
 else
     echo "Gemini CLI already installed"
     # Check if it's the right package
-    if ! npm list -g @google/genai &> /dev/null; then
-        print_warning "Found 'gemini' command but not the correct package. Installing @google/genai..."
+    if ! npm list -g @google/gemini-cli &> /dev/null; then
+        print_warning "Found 'gemini' command but not the correct package. Installing @google/gemini-cli..."
         print_separator "Updating Gemini CLI"
-        run_command "sudo npm install -g @google/genai" "Installing correct @google/genai package"
+        run_command "sudo npm install -g @google/gemini-cli" "Installing correct @google/gemini-cli package"
         print_success "Correct Gemini package installed"
     fi
 fi
+
+print_step "Configuring Gemini CLI..."
+
+print_separator "Setting Up Gemini CLI Authentication"
+echo -e "  ${YELLOW}🔑${NC} Configuring Gemini CLI for first-time use..."
+echo
+echo -e "  ${BLUE}This version of Gemini CLI ($(gemini --version 2>/dev/null)) uses environment variables for authentication.${NC}"
+echo -e "  ${BLUE}You need to set the GEMINI_API_KEY environment variable.${NC}"
+echo
+echo -e "  ${GREEN}Authentication Method: Environment Variable${NC}"
+echo -e "    • Get your key: ${BLUE}https://aistudio.google.com/app/apikey${NC}"
+echo -e "    • Set GEMINI_API_KEY environment variable"
+echo -e "    • No interactive configuration needed"
+echo
+echo -e "  ${YELLOW}⚠️  You'll need to complete this setup before the service can work!${NC}"
+echo
+
+# Check if user wants to configure now or later
+echo -e "${BLUE}Would you like to set up the API key now? (y/n)${NC}"
+read -r configure_now
+
+if [[ $configure_now =~ ^[Yy]$ ]]; then
+    echo -e "  ${YELLOW}▶${NC} Setting up Gemini API key..."
+    echo -e "  ${BLUE}Please enter your Gemini API key:${NC}"
+    echo -e "  ${BLUE}(Get one from: https://aistudio.google.com/app/apikey)${NC}"
+    read -r -s api_key
+    
+    if [ -n "$api_key" ]; then
+        # Test the API key
+        export GEMINI_API_KEY="$api_key"
+        if gemini --version >/dev/null 2>&1; then
+            print_success "API key test passed!"
+            
+            # Store for later use in environment file
+            TEMP_API_KEY="$api_key"
+        else
+            print_warning "API key test failed - please verify your key"
+            echo -e "  ${YELLOW}💡${NC} You can set it up later using: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
+        fi
+    else
+        print_warning "No API key provided"
+        echo -e "  ${YELLOW}💡${NC} You can set it up later using: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
+    fi
+else
+    print_warning "Skipping Gemini CLI configuration"
+    echo -e "  ${YELLOW}💡${NC} Remember to configure later with: ${BLUE}./deploy/setup-gemini-cli.sh${NC}"
+    echo -e "  ${YELLOW}💡${NC} Or set GEMINI_API_KEY environment variable"
+fi
+
+echo
 
 print_step "Installing project dependencies..."
 
@@ -265,12 +315,16 @@ fi
 ENV_FILE="$CONFIG_DIR/environment"
 if [ ! -f "$ENV_FILE" ]; then
     echo -e "  ${YELLOW}▶${NC} Creating environment configuration template..."
+    
+    # Use the API key if provided during setup, otherwise use placeholder
+    API_KEY_VALUE="${TEMP_API_KEY:-your_gemini_api_key_here}"
+    
     sudo tee "$ENV_FILE" > /dev/null << EOL
 # Gemini Coding Factory Environment Configuration
 # Edit this file with your actual values
 
 # Required: Gemini API Key from Google AI Studio or Vertex AI
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=$API_KEY_VALUE
 
 # Required: GitHub Personal Access Token with repo access
 GITHUB_TOKEN=your_github_token_here
@@ -296,8 +350,13 @@ EOL
     run_quiet_command "sudo chown '$SERVICE_USER:$SERVICE_GROUP' '$ENV_FILE'" "Setting file ownership"
     run_quiet_command "sudo chmod 600 '$ENV_FILE'" "Setting secure file permissions"
     echo -e "  ${GREEN}✓${NC} Environment configuration template created"
-    echo
-    print_warning "⚠️  IMPORTANT: Edit $ENV_FILE with your actual API keys!"
+    
+    if [ -n "${TEMP_API_KEY:-}" ]; then
+        print_success "✅ Gemini API key has been added to the service configuration"
+    else
+        echo
+        print_warning "⚠️  IMPORTANT: Edit $ENV_FILE with your actual API keys!"
+    fi
 fi
 
 print_step "Setting up systemd service..."
@@ -360,6 +419,19 @@ print_separator "🎉 Installation Complete!"
 echo -e "${GREEN}✅ Installation completed successfully!${NC}"
 echo
 echo -e "${BLUE}🔧 Next steps:${NC}"
+
+# Check if Gemini CLI was configured
+if [ -n "${TEMP_API_KEY:-}" ]; then
+    echo -e "✅ Gemini CLI API key configured during installation"
+elif [ -n "${GEMINI_API_KEY:-}" ]; then
+    echo -e "✅ Gemini CLI API key found in environment"
+else
+    echo -e "⚠️  ${YELLOW}Configure Gemini CLI first:${NC}"
+    echo "   ./deploy/setup-gemini-cli.sh"
+    echo "   (Set up your API key from https://aistudio.google.com/app/apikey)"
+    echo
+fi
+
 echo "1. Edit the configuration file with your API keys:"
 echo "   sudo nano $ENV_FILE"
 echo
@@ -386,6 +458,7 @@ echo "• Status: http://localhost:3000/status"
 echo "• Webhook: http://localhost:3000/webhook"
 echo
 echo -e "${YELLOW}⚠️  Remember to:${NC}"
+echo "• Configure Gemini CLI if you skipped it: ./deploy/setup-gemini-cli.sh"
 echo "• Add webhook URLs to your GitHub repositories"
 echo "• Ensure port 3000 is accessible from GitHub"
 echo "• Monitor logs for any issues"

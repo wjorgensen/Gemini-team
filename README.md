@@ -49,7 +49,30 @@ chmod +x deploy/install-arch.sh
 ./deploy/install-arch.sh
 ```
 
-### 3. Configuration
+### 3. Configure Gemini CLI
+
+The Gemini CLI needs authentication setup before the service can work. You have two options:
+
+**Option A: Interactive Setup (Recommended)**
+```bash
+# Run the CLI configuration helper
+chmod +x deploy/setup-gemini-cli.sh
+./deploy/setup-gemini-cli.sh
+```
+
+**Option B: Manual Setup**
+```bash
+# Configure the CLI interactively
+gemini configure
+
+# When prompted:
+# 1. Choose "Gemini API Key (AI Studio)"
+# 2. Get your key from: https://aistudio.google.com/app/apikey
+# 3. Paste your API key
+# 4. Test with: gemini --version
+```
+
+### 4. Service Configuration
 
 Edit the environment configuration:
 ```bash
@@ -64,7 +87,7 @@ WEBHOOK_SECRET=your_webhook_secret_here
 AUTHORIZED_USERS=wjorgensen
 ```
 
-### 4. Start the Service
+### 5. Start the Service
 
 ```bash
 # Enable and start the service
@@ -75,12 +98,107 @@ sudo systemctl start gemini-coding-factory.service
 sudo systemctl status gemini-coding-factory.service
 ```
 
-### 5. Test Any Repository
+### 6. Set Up GitHub Webhooks
 
-1. **Configure Webhooks**: Point any GitHub repository to `http://your-server:3000/webhook`
-2. **Create a PR** on any repository (Next.js, Rust, Solidity, etc.)
-3. **Comment**: `@gemini Add user authentication with login and registration`
-4. **Watch Magic**: Gemini detects the project type and implements the feature!
+#### **Generate Webhook Secret**
+```bash
+# Generate a secure random secret
+SECRET=$(openssl rand -hex 32)
+echo "Webhook secret: $SECRET"
+
+# Add it to your environment file
+sudo nano /etc/gemini-coding-factory/environment
+# Add: WEBHOOK_SECRET=your_generated_secret_here
+```
+
+#### **Configure Repository Webhooks**
+
+For each repository you want to use with Gemini:
+
+1. **Navigate to Repository Settings**
+   - Go to your GitHub repository
+   - Click **Settings** → **Webhooks** → **Add webhook**
+
+2. **Configure Webhook Settings**
+   - **Payload URL**: `http://your-server-ip:3000/webhook`
+     - *Replace `your-server-ip` with your actual server IP*
+     - *For local testing, use ngrok: `https://abc123.ngrok.io/webhook`*
+   - **Content type**: `application/json`
+   - **Secret**: Paste the webhook secret you generated above
+   - **Which events**: Select **"Let me select individual events"**
+     - ✅ **Issue comments** (this is what triggers Gemini)
+     - ❌ Uncheck all other events
+
+3. **Test the Webhook**
+   - Click **Add webhook**
+   - GitHub will send a test ping to your server
+   - Check that you see a green ✅ in the webhook list
+
+#### **For Local Development (No Port Forwarding)**
+
+If you can't port forward, use **ngrok**:
+
+```bash
+# Install ngrok (using AUR helper like yay)
+yay -S ngrok
+
+# Create free account at https://ngrok.com and get your authtoken
+ngrok authtoken YOUR_AUTHTOKEN
+
+# Expose your local server
+ngrok http 3000
+
+# Use the generated URL in GitHub webhook settings
+# Example: https://abc123.ngrok.io/webhook
+```
+
+### 7. Test Any Repository
+
+1. **Create a PR** on any repository (Next.js, Rust, Solidity, etc.)
+2. **Comment**: `@gemini Add user authentication with login and registration`
+3. **Watch Magic**: Gemini detects the project type and implements the feature!
+
+### 8. Troubleshooting
+
+#### **Gemini CLI Issues**
+
+| Problem | Solution |
+|---------|----------|
+| ❌ `GEMINI_API_KEY environment variable not found` | Run `gemini configure` or `./deploy/setup-gemini-cli.sh` |
+| ❌ `gemini: command not found` | Install CLI: `sudo npm install -g @google/gemini-cli` |
+| ❌ Authentication errors | Reconfigure: `gemini configure --reset` |
+| ❌ API key invalid | Get new key from https://aistudio.google.com/app/apikey |
+
+#### **Webhook Issues**
+
+#### **Check Webhook Status**
+```bash
+# Check if service is running
+sudo systemctl status gemini-coding-factory.service
+
+# View real-time logs
+sudo journalctl -u gemini-coding-factory.service -f
+
+# Test webhook endpoint manually
+curl -X POST http://localhost:3000/webhook -H "Content-Type: application/json" -d '{}'
+```
+
+#### **Common Issues**
+
+| Problem | Solution |
+|---------|----------|
+| ❌ Webhook shows red X in GitHub | Check server is running and accessible |
+| ❌ "Connection refused" | Verify port 3000 is open and service is running |
+| ❌ "Invalid signature" | Ensure webhook secret matches in both GitHub and environment file |
+| ❌ Nothing happens on `@gemini` comment | Check you're commenting on a PR (not issue) and user is authorized |
+| ❌ Can't access from outside | Use ngrok or configure port forwarding |
+
+#### **Test Webhook Delivery**
+1. Go to your GitHub repository webhook settings
+2. Click on your webhook
+3. Scroll down to **Recent Deliveries**
+4. Click on a delivery to see the request/response
+5. Look for HTTP 200 status (success) or error details
 
 ## 📖 How It Works
 
@@ -362,9 +480,27 @@ npm run test:e2e:debug
 
 ### Common Issues
 
+**Gemini CLI not configured**
+```bash
+# Option 1: Use helper script
+./deploy/setup-gemini-cli.sh
+
+# Option 2: Manual configuration
+gemini configure
+```
+
 **Gemini CLI not found**
 ```bash
-npm install -g @google/gemini-cli
+sudo npm install -g @google/gemini-cli
+```
+
+**Environment variable not found error**
+```bash
+# Configure CLI authentication
+gemini configure
+
+# Or set environment globally
+export GEMINI_API_KEY=your_key_here
 ```
 
 **Playwright browsers missing**
@@ -440,8 +576,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/wjorgensen/Gemini-team/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/wjorgensen/Gemini-team/discussions)
+- **Issues**: [GitHub Issues](https://github.com/wjorgensen/gemini/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/wjorgensen/gemini/discussions)
 - **Documentation**: This README and `GEMINI.md`
 
 ---

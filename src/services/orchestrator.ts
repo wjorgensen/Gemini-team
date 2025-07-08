@@ -193,7 +193,7 @@ export class GeminiOrchestrator {
     config: ProjectConfig
   ): Promise<WorkflowResult> {
     return new Promise((resolve, reject) => {
-      const geminiProcess = spawn('gemini', ['--no-confirm'], {
+      const geminiProcess = spawn('gemini', ['--yolo'], {
         cwd: workingDir,
         env,
         stdio: ['pipe', 'pipe', 'pipe']
