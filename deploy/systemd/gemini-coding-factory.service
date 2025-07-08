@@ -26,15 +26,16 @@ Environment=LOG_LEVEL=info
 # Environment file for secrets
 EnvironmentFile=-/etc/gemini-coding-factory/environment
 
-# Security settings
+# Security settings - Relaxed for development service that needs git/npm access
 NoNewPrivileges=true
-ProtectSystem=strict
+ProtectSystem=false
 ProtectHome=false
-ReadWritePaths=/home/wes/coding-factory /home/wes/gemini-coding-factory/logs
-PrivateTmp=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+ReadWritePaths=/home/wes/coding-factory /home/wes/gemini-coding-factory /var/log/gemini-coding-factory
+PrivateTmp=false
+# Commented out restrictive settings that cause namespace issues
+# ProtectKernelTunables=true
+# ProtectKernelModules=true
+# ProtectControlGroups=true
 
 # Resource limits
 LimitNOFILE=65536
