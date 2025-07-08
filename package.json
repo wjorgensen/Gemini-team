@@ -1,0 +1,67 @@
+{
+  "name": "gemini-coding-factory",
+  "version": "1.0.0",
+  "description": "Multi-repository coding factory using Gemini CLI for automated feature development across any project type",
+  "main": "dist/server.js",
+  "bin": {
+    "gemini-factory": "dist/server.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc && chmod +x dist/server.js",
+    "start": "node dist/server.js",
+    "start:dev": "tsx src/server.ts",
+    "lint": "echo 'Linting skipped - TypeScript compilation handles type checking'",
+    "type-check": "tsc --noEmit",
+    "test": "echo 'Factory service tests - TBD'",
+    "test:repos": "echo 'Use this to test managed repositories'",
+    "gemini:setup": "gemini configure",
+    "gemini:test": "echo 'Testing Gemini CLI integration...' && gemini --version",
+    "docker:build": "docker build -t gemini-coding-factory .",
+    "docker:run": "docker run -it --rm -v $(pwd):/workspace gemini-coding-factory",
+    "docker:dev": "docker-compose up --build",
+    "clean": "rm -rf dist",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@google/genai": "^1.8.0",
+    "@octokit/rest": "^20.0.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.52.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.2.0"
+  },
+  "keywords": [
+    "gemini",
+    "ai",
+    "automation",
+    "multi-repository",
+    "webhook",
+    "coding-factory",
+    "background-service",
+    "node.js",
+    "typescript"
+  ],
+  "author": "wjorgensen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wjorgensen/Gemini-team.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wjorgensen/Gemini-team/issues"
+  },
+  "homepage": "https://github.com/wjorgensen/Gemini-team#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

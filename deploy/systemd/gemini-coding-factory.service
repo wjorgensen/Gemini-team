@@ -1,0 +1,48 @@
+[Unit]
+Description=Gemini Coding Factory - Multi-Repository AI Development Service
+Documentation=https://github.com/wjorgensen/Gemini-team
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wes
+Group=wes
+WorkingDirectory=/home/wes/gemini-coding-factory
+ExecStart=/usr/bin/node /home/wes/gemini-coding-factory/dist/server.js
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gemini-factory
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=WORKSPACE_ROOT=/home/wes/coding-factory
+Environment=PORT=3000
+Environment=LOG_LEVEL=info
+
+# Environment file for secrets
+EnvironmentFile=-/etc/gemini-coding-factory/environment
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/wes/coding-factory /home/wes/gemini-coding-factory/logs
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Timeout settings
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target 
