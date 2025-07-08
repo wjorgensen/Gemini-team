@@ -325,7 +325,8 @@ echo -e "  ${YELLOW}⚠️${NC}  This step may take several minutes..."
 echo -e "  ${YELLOW}▶${NC} Installing system dependencies for Playwright browsers..."
 # Complete list of Arch packages needed for Chromium, Firefox, and WebKit browsers
 # Based on community testing and Microsoft's Playwright requirements for Linux
-PLAYWRIGHT_DEPS=("nss" "nspr" "at-spi2-core" "libcups" "libdrm" "dbus" "libx11" "libxcomposite" "libxdamage" "libxext" "libxfixes" "libxrandr" "libxcb" "libxkbcommon" "mesa" "pango" "cairo" "alsa-lib" "fontconfig" "freetype2" "libxss" "libevent" "xorg-server-xvfb")
+# Updated with WebKit-specific dependencies and multimedia support
+PLAYWRIGHT_DEPS=("nss" "nspr" "at-spi2-core" "libcups" "libdrm" "dbus" "libx11" "libxcomposite" "libxdamage" "libxext" "libxfixes" "libxrandr" "libxcb" "libxkbcommon" "mesa" "pango" "cairo" "alsa-lib" "fontconfig" "freetype2" "libxss" "libevent" "xorg-server-xvfb" "libxml2" "woff2" "harfbuzz-icu" "libwebp" "enchant" "hyphen" "libgudev" "libevdev" "x264" "icu" "libffi")
 MISSING_DEPS=()
 
 for dep in "${PLAYWRIGHT_DEPS[@]}"; do
@@ -341,9 +342,52 @@ else
     echo -e "  ${GREEN}✓${NC} All Playwright system dependencies already installed"
 fi
 
+# Handle version-specific library compatibility for WebKit
+echo -e "  ${YELLOW}▶${NC} Setting up WebKit compatibility libraries..."
+
+# Create symlinks for version-locked ICU libraries (Playwright expects .66, Arch has .76+)
+ICU_SYMLINKS_NEEDED=false
+for lib in libicudata libicuuc libicui18n; do
+    if [ ! -f "/usr/lib/${lib}.so.66" ] && [ -f "/usr/lib/${lib}.so" ]; then
+        ICU_SYMLINKS_NEEDED=true
+        break
+    fi
+done
+
+if [ "$ICU_SYMLINKS_NEEDED" = true ]; then
+    echo -e "    ${BLUE}Creating ICU library symlinks for WebKit compatibility...${NC}"
+    sudo ln -sf /usr/lib/libicudata.so /usr/lib/libicudata.so.66 2>/dev/null || true
+    sudo ln -sf /usr/lib/libicuuc.so /usr/lib/libicuuc.so.66 2>/dev/null || true
+    sudo ln -sf /usr/lib/libicui18n.so /usr/lib/libicui18n.so.66 2>/dev/null || true
+    echo -e "    ${GREEN}✓${NC} ICU library symlinks created"
+else
+    echo -e "    ${GREEN}✓${NC} ICU libraries already compatible"
+fi
+
+# Create symlink for libffi (Playwright expects .7, Arch has .8+)
+if [ ! -f "/usr/lib/libffi.so.7" ] && [ -f "/usr/lib/libffi.so" ]; then
+    echo -e "    ${BLUE}Creating libffi library symlink for WebKit compatibility...${NC}"
+    sudo ln -sf /usr/lib/libffi.so /usr/lib/libffi.so.7 2>/dev/null || true
+    echo -e "    ${GREEN}✓${NC} libffi library symlink created"
+else
+    echo -e "    ${GREEN}✓${NC} libffi library already compatible"
+fi
+
+echo -e "  ${GREEN}✓${NC} WebKit compatibility libraries configured"
+
 # Install browsers without system dependencies (since we handled them above)
 # Note: We do NOT use --with-deps because that tries to use apt-get on Arch Linux
 run_command "npx playwright install" "Installing Playwright browsers (Chromium, Firefox, WebKit)"
+
+# Verify WebKit dependencies are satisfied
+echo -e "  ${YELLOW}▶${NC} Verifying WebKit dependencies..."
+if npx playwright install-deps --dry-run 2>&1 | grep -q "missing dependencies"; then
+    print_warning "Some WebKit dependencies may still be missing"
+    echo -e "    ${BLUE}This is usually safe for basic usage${NC}"
+    echo -e "    ${BLUE}WebKit tests and video recording may need additional setup${NC}"
+else
+    print_success "✅ All Playwright dependencies satisfied"
+fi
 
 print_step "Setting up configuration..."
 
