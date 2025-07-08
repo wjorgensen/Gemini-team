@@ -203,6 +203,15 @@ fi
 
 print_step "Configuring Gemini CLI..."
 
+# Store the repository directory (current directory) early for CLI setup
+REPO_DIR="$(pwd)"
+
+# Ensure we have the project files in the repository
+if [ ! -f "package.json" ]; then
+    print_error "package.json not found. Make sure you're running this from the cloned repository."
+    exit 1
+fi
+
 print_separator "Setting Up Gemini CLI Authentication"
 echo -e "  ${YELLOW}🔑${NC} Setting up Gemini CLI for first-time use..."
 echo
@@ -294,15 +303,6 @@ cd "$APP_DIR"
 echo
 
 print_step "Installing project dependencies..."
-
-# Store the repository directory (current directory)
-REPO_DIR="$(pwd)"
-
-# Ensure we have the project files in the repository
-if [ ! -f "package.json" ]; then
-    print_error "package.json not found. Make sure you're running this from the cloned repository."
-    exit 1
-fi
 
 # Copy repository files to application directory
 echo "📂 Copying project files to $APP_DIR..."
