@@ -1,12 +1,11 @@
 'use client';
 
-import { useJobs } from '@/lib/socket';
-import { JobCard } from '@/components/JobCard';
+import { useSocket } from '@/lib/socket';
 import { QueueStats } from '@/components/QueueStats';
 import { Activity, RefreshCw } from 'lucide-react';
 
 export default function Dashboard() {
-  const { jobs, queueStats, connected } = useJobs();
+  const { connected, queueStats } = useSocket();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,35 +53,21 @@ export default function Dashboard() {
           <QueueStats stats={queueStats} connected={connected} />
         </div>
 
-        {/* Recent Jobs */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Recent Jobs
-            </h2>
-            <span className="text-sm text-gray-500">
-              {jobs.length} total jobs
-            </span>
+        {/* Welcome Message */}
+        <div className="text-center py-12">
+          <Activity className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Gemini Coding Factory Dashboard
+          </h3>
+          <p className="text-gray-500 max-w-md mx-auto">
+            Monitor your queue status above. Jobs will be processed when GitHub webhooks trigger Gemini processing.
+            Make sure your webhook server is running and configured.
+          </p>
+          <div className="mt-6 space-y-2 text-sm text-gray-600">
+            <p><strong>Backend API:</strong> http://192.168.1.75:5000</p>
+            <p><strong>Webhook URL:</strong> http://your-ngrok-url.ngrok-free.app/webhook</p>
+            <p><strong>Health Check:</strong> http://192.168.1.75:5000/health</p>
           </div>
-          
-          {jobs.length === 0 ? (
-            <div className="text-center py-12">
-              <Activity className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                No jobs yet
-              </h3>
-              <p className="text-gray-500 max-w-md mx-auto">
-                Jobs will appear here when GitHub webhooks trigger Gemini processing.
-                Make sure your webhook server is running and configured.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {jobs.map((job) => (
-                <JobCard key={job.jobId} job={job} />
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

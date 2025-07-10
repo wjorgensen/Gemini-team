@@ -3,6 +3,8 @@
 import { createWebhookServer } from './services/webhook-server';
 import { Logger } from './utils/logger';
 import { config } from 'dotenv';
+// Import the worker to start it
+import './services/worker';
 
 // Load environment variables
 config();

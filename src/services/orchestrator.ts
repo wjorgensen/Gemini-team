@@ -29,6 +29,25 @@ export class GeminiOrchestrator {
   private static quotaResetTime = 0;
   private static readonly QUOTA_RESET_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
+  /**
+   * Manually reset quota protection (for false positives)
+   */
+  static resetQuotaProtection(): void {
+    GeminiOrchestrator.quotaExhausted = false;
+    GeminiOrchestrator.quotaResetTime = 0;
+    console.log('🔄 Quota protection manually reset');
+  }
+
+  /**
+   * Get current quota protection status
+   */
+  static getQuotaStatus(): { protected: boolean; resetTime: number } {
+    return {
+      protected: GeminiOrchestrator.quotaExhausted,
+      resetTime: GeminiOrchestrator.quotaResetTime
+    };
+  }
+
   constructor(workspaceRoot: string = '/home/wes/coding-factory') {
     this.workspaceRoot = workspaceRoot;
     this.repositoryManager = new RepositoryManager(workspaceRoot);
@@ -264,13 +283,32 @@ Service will resume automatically when quota resets.`
 
   /**
    * Detects quota exhaustion in stderr and activates protection
+   * More specific detection to prevent false positives
    */
   private detectQuotaExhaustion(stderr: string): boolean {
-    const quotaIndicators = ['quota', '429', 'free_tier_requests', 'RESOURCE_EXHAUSTED', 'exceeded your current quota'];
-    if (quotaIndicators.some(indicator => stderr.toLowerCase().includes(indicator.toLowerCase()))) {
+    const stderrLower = stderr.toLowerCase();
+    
+    // More specific quota exhaustion patterns
+    const quotaPatterns = [
+      'resource_exhausted.*quota.*exceeded',
+      'status 429.*quota',
+      'free_tier_requests.*exceeded',
+      'exceeded your current quota',
+      'api quota.*exhausted',
+      'rate limit.*exceeded.*quota'
+    ];
+    
+    // Check for specific patterns rather than just keywords
+    const isQuotaExhausted = quotaPatterns.some(pattern => {
+      const regex = new RegExp(pattern, 'i');
+      return regex.test(stderr);
+    });
+    
+    if (isQuotaExhausted) {
       this.logger.error('🚫 QUOTA EXHAUSTION DETECTED', {
         message: 'Activating quota protection to prevent further waste',
-        resetTime: new Date(Date.now() + GeminiOrchestrator.QUOTA_RESET_INTERVAL).toISOString()
+        resetTime: new Date(Date.now() + GeminiOrchestrator.QUOTA_RESET_INTERVAL).toISOString(),
+        stderrTrigger: stderr.substring(0, 500) // Log first 500 chars for debugging
       });
       
       // Set quota exhaustion protection
@@ -470,23 +508,33 @@ ${result.commits.length > 0 ? `**Commits added:** ${result.commits.length}` : ''
     }
   }
 
-  async executeGemini(repoPath: string, prompt: string): Promise<string> {
+  async executeGemini(repoPath: string, prompt: string, jobId?: string): Promise<string> {
     this.logger.info(`Executing Gemini for ${repoPath}`);
 
-    const promptFile = join(repoPath, '.gemini-prompt.txt');
-    await fs.writeFile(promptFile, prompt);
-
+    // Use the correct Gemini CLI flags based on the help output
     const geminiArgs = [
-      '--prompt-file', promptFile,
-      '--yolo',
-      '--model', 'gemini-1.5-pro',
-      '--output-format', 'stream-json'
+      '--prompt', prompt,  // Use -p/--prompt instead of --prompt-file
+      '--yolo',            // Auto-accept actions
+      '--model', 'gemini-2.5-pro',
+      '--all_files'        // Include all files in context
     ];
 
+    // Import emitJobStdout for real-time streaming
+    const { emitJobStdout } = await import('./events');
+
     return new Promise((resolve, reject) => {
+      if (jobId) {
+        emitJobStdout(jobId, `🚀 Starting Gemini CLI: gemini ${geminiArgs.filter(arg => arg !== prompt).join(' ')} --prompt "<prompt>"`);
+        emitJobStdout(jobId, `📁 Working directory: ${repoPath}`);
+        emitJobStdout(jobId, `📄 Prompt length: ${prompt.length} characters`);
+      }
+
       const geminiProcess = spawn('gemini', geminiArgs, {
         cwd: repoPath,
-        env: { ...process.env }
+        env: { 
+          ...process.env,
+          GEMINI_API_KEY: process.env.GEMINI_API_KEY
+        }
       });
 
       const out = readline.createInterface({ input: geminiProcess.stdout! });
@@ -497,25 +545,49 @@ ${result.commits.length > 0 ? `**Commits added:** ${result.commits.length}` : ''
 
       out.on('line', line => {
         output += line + '\n';
+        if (jobId) {
+          emitJobStdout(jobId, line);
+        }
       });
 
       err.on('line', line => {
         errorOutput += line + '\n';
+        if (jobId) {
+          emitJobStdout(jobId, `🔶 ${line}`);
+        }
+        
         if (this.detectQuotaExhaustion(line)) {
+          if (jobId) {
+            emitJobStdout(jobId, '🚫 API quota exhausted - terminating process');
+          }
           geminiProcess.kill();
           reject(new QuotaExceededError('API quota exhausted'));
         }
       });
 
       geminiProcess.on('close', code => {
+        if (jobId) {
+          emitJobStdout(jobId, `🏁 Gemini process finished with exit code: ${code}`);
+        }
+        
         if (code === 0) {
+          if (jobId) {
+            emitJobStdout(jobId, '✅ Gemini execution completed successfully');
+          }
           resolve(output);
         } else {
-          reject(new Error(this.enhanceErrorMessage(code ?? -1, errorOutput)));
+          const errorMsg = this.enhanceErrorMessage(code ?? -1, errorOutput);
+          if (jobId) {
+            emitJobStdout(jobId, `❌ Gemini execution failed: ${errorMsg}`);
+          }
+          reject(new Error(errorMsg));
         }
       });
 
       geminiProcess.on('error', err => {
+        if (jobId) {
+          emitJobStdout(jobId, `💥 Process error: ${err.message}`);
+        }
         reject(err);
       });
     });

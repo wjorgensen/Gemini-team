@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { JobStatus } from "@/lib/socket";
-import { Clock, User, GitBranch, Folder, Eye } from "lucide-react";
+import { Clock, User, GitBranch, Eye } from "lucide-react";
 import Link from "next/link";
 
 interface JobCardProps {
@@ -21,8 +21,6 @@ export function JobCard({ job }: JobCardProps) {
         return 'info';
       case 'waiting':
         return 'warning';
-      case 'stalled':
-        return 'destructive';
       default:
         return 'default';
     }
@@ -38,8 +36,6 @@ export function JobCard({ job }: JobCardProps) {
         return '🚀';
       case 'waiting':
         return '⏳';
-      case 'stalled':
-        return '⚠️';
       default:
         return '📋';
     }
@@ -63,7 +59,7 @@ export function JobCard({ job }: JobCardProps) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <span className="text-xl">{getStatusIcon(job.status)}</span>
-            <span className="truncate">{job.jobId}</span>
+            <span className="truncate">{job.id}</span>
           </CardTitle>
           <Badge variant={getStatusVariant(job.status)}>
             {job.status.toUpperCase()}
@@ -73,33 +69,18 @@ export function JobCard({ job }: JobCardProps) {
       
       <CardContent className="space-y-3">
         {/* Repository Info */}
-        {job.metadata?.repository && (
+        {job.repository && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <GitBranch className="h-4 w-4" />
-            <span className="truncate">{job.metadata.repository}</span>
+            <span className="truncate">{job.repository}</span>
           </div>
         )}
 
         {/* User Info */}
-        {job.metadata?.user && (
+        {job.user && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <User className="h-4 w-4" />
-            <span>{job.metadata.user}</span>
-          </div>
-        )}
-
-        {/* Project Type */}
-        {job.metadata?.projectType && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Folder className="h-4 w-4" />
-            <span>{job.metadata.projectType}</span>
-          </div>
-        )}
-
-        {/* Feature Specification */}
-        {job.metadata?.featureSpec && (
-          <div className="text-sm bg-muted p-2 rounded">
-            <p className="line-clamp-3">{job.metadata.featureSpec}</p>
+            <span>{job.user}</span>
           </div>
         )}
 
@@ -109,27 +90,10 @@ export function JobCard({ job }: JobCardProps) {
           <span>{formatTime(job.timestamp)}</span>
         </div>
 
-        {/* Error Message */}
-        {job.error && (
-          <div className="text-sm text-red-600 bg-red-50 p-2 rounded border-l-4 border-red-500">
-            <p className="line-clamp-2">{job.error}</p>
-          </div>
-        )}
-
-        {/* Success Result Summary */}
-        {job.status === 'completed' && job.result && (
-          <div className="text-sm text-green-600 bg-green-50 p-2 rounded border-l-4 border-green-500">
-            <p>✅ Job completed successfully</p>
-            {job.result.duration && (
-              <p className="text-xs">Duration: {Math.round(job.result.duration / 1000)}s</p>
-            )}
-          </div>
-        )}
-
         {/* View Logs Button */}
         <div className="pt-2">
           <Link 
-            href={`/job/${job.jobId}`}
+            href={`/job/${job.id}`}
             className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
           >
             <Eye className="h-4 w-4" />

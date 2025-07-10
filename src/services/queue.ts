@@ -34,11 +34,7 @@ export const rateLimiter = {
   duration: 60_000,         // Per 60 seconds (1 minute)
 };
 
-// Apply rate limiting to the queue
-geminiQueue.add('rate-limit-config', {}, {
-  repeat: { every: 60_000 }, // Check every minute
-  jobId: 'rate-limiter',
-});
+// Note: Rate limiting is now handled by Express middleware instead of queue-based limiting
 
 // Queue events for real-time monitoring
 export const queueEvents = new QueueEvents('gemini-jobs', {

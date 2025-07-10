@@ -37,7 +37,10 @@ export class WebhookServer {
    * Sets up Express middleware
    */
   private setupMiddleware(): void {
-    // Rate limiting using express-rate-limit (replaces manual rate limiting)
+    // Enable trust proxy for proper IP detection behind proxies (like GitHub webhooks)
+    this.app.set('trust proxy', true);
+
+    // Rate limiting using express-rate-limit with proper proxy handling
     const webhookRateLimit = rateLimit({
       windowMs: 60 * 1000, // 1 minute window
       max: 10, // Limit each IP to 10 requests per windowMs
@@ -47,6 +50,21 @@ export class WebhookServer {
       },
       standardHeaders: true,
       legacyHeaders: false,
+      // Use a more reliable key generator for GitHub webhooks
+      keyGenerator: (req) => {
+        // For GitHub webhooks, use the delivery ID as the key to prevent duplicates
+        const githubDelivery = req.headers['x-github-delivery'] as string;
+        if (githubDelivery) {
+          return `github-${githubDelivery}`;
+        }
+        // Fallback to IP-based limiting
+        return req.ip || req.connection.remoteAddress || 'unknown';
+      },
+      // Skip rate limiting for known GitHub webhook IPs if needed
+      skip: (req) => {
+        const userAgent = req.headers['user-agent'] as string;
+        return !!(userAgent && userAgent.startsWith('GitHub-Hookshot/'));
+      }
     });
 
     // Apply rate limiting to webhook endpoints
