@@ -55,6 +55,8 @@ sudo journalctl -u gemini-coding-factory.service -f
 - A [GitHub token](https://github.com/settings/tokens) with repo access
 - Redis server installed and running
 
+> **Note for Arch Linux users**: As of recent updates, the `redis` package in Arch Linux has been replaced by `valkey`. The installation script handles this automatically. For manual installation, install `valkey` instead of `redis`.
+
 **2. Clone & Install Dependencies**
 ```bash
 # Clone the repository
@@ -265,6 +267,8 @@ redis-cli ping
 # Start Redis if not running
 redis-server
 ```
+
+> **Note for Arch Linux users**: Use `valkey-cli ping` and `valkey-server` instead.
 
 **❌ Dashboard shows "Disconnected"**
 ```bash

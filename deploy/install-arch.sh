@@ -107,7 +107,7 @@ fi
 print_step "Checking system dependencies..."
 
 # Check for required tools
-REQUIRED_COMMANDS=("git" "node" "npm" "docker" "docker-compose" "redis-server" "tmux")
+REQUIRED_COMMANDS=("git" "node" "npm" "docker" "docker-compose" "valkey-server" "tmux")
 MISSING_COMMANDS=()
 
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
@@ -130,7 +130,7 @@ if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
             "npm") PACKAGES_TO_INSTALL+=("npm") ;;
             "docker") PACKAGES_TO_INSTALL+=("docker") ;;
             "docker-compose") PACKAGES_TO_INSTALL+=("docker-compose") ;;
-            "redis-server") PACKAGES_TO_INSTALL+=("redis") ;;
+            "valkey-server") PACKAGES_TO_INSTALL+=("valkey") ;;
             "tmux") PACKAGES_TO_INSTALL+=("tmux") ;;
         esac
     done
@@ -171,23 +171,23 @@ if command -v docker &> /dev/null; then
     fi
 fi
 
-# Start and enable Redis service if installed
-if command -v redis-server &> /dev/null; then
-    print_step "Setting up Redis service..."
+# Start and enable Valkey service if installed
+if command -v valkey-server &> /dev/null; then
+    print_step "Setting up Valkey service..."
     
-    print_separator "Configuring Redis Service"
-    if ! systemctl is-active --quiet redis; then
-        run_command "sudo systemctl start redis" "Starting Redis service"
-        print_success "Redis service started"
+    print_separator "Configuring Valkey Service"
+    if ! systemctl is-active --quiet valkey; then
+        run_command "sudo systemctl start valkey" "Starting Valkey service"
+        print_success "Valkey service started"
     else
-        echo -e "  ${GREEN}✓${NC} Redis service already running"
+        echo -e "  ${GREEN}✓${NC} Valkey service already running"
     fi
     
-    if ! systemctl is-enabled --quiet redis; then
-        run_command "sudo systemctl enable redis" "Enabling Redis service for auto-start"
-        print_success "Redis service enabled"
+    if ! systemctl is-enabled --quiet valkey; then
+        run_command "sudo systemctl enable valkey" "Enabling Valkey service for auto-start"
+        print_success "Valkey service enabled"
     else
-        echo -e "  ${GREEN}✓${NC} Redis service already enabled"
+        echo -e "  ${GREEN}✓${NC} Valkey service already enabled"
     fi
 fi
 
@@ -797,10 +797,10 @@ echo -e "\${BLUE}🚀 Starting Gemini Coding Factory...\${NC}"
 echo
 
 # Start Redis if not running
-print_status "Checking Redis service..."
-if ! systemctl is-active --quiet redis; then
-    print_warning "Redis not running, starting it..."
-    sudo systemctl start redis
+print_status "Checking Valkey service..."
+if ! systemctl is-active --quiet valkey; then
+    print_warning "Valkey not running, starting it..."
+    sudo systemctl start valkey
 fi
 
 # Start backend service
@@ -877,7 +877,7 @@ echo -e "\${GREEN}🎉 Gemini Coding Factory started successfully!\${NC}"
 echo
 echo -e "\${BLUE}📊 Service Status:\${NC}"
 echo -e "  • Backend service: \$(systemctl is-active gemini-coding-factory.service)"
-echo -e "  • Redis service: \$(systemctl is-active redis)"
+echo -e "  • Valkey service: \$(systemctl is-active valkey)"
 echo -e "  • Dashboard: http://localhost:\${DASHBOARD_PORT:-3000}"
 if [ "\$INSTALL_NGROK" = "true" ]; then
     echo -e "  • ngrok tunnels: Running in tmux sessions"
@@ -1028,7 +1028,7 @@ echo -e "${BLUE}🔧 Manual Control (if needed):${NC}"
 echo -e "• Backend service: sudo systemctl start/stop gemini-coding-factory.service"
 echo -e "• View backend logs: sudo journalctl -u gemini-coding-factory.service -f"
 echo -e "• Attach to dashboard: tmux attach -t gemini-dashboard"
-echo -e "• Redis service: sudo systemctl start/stop redis"
+echo -e "• Valkey service: sudo systemctl start/stop valkey"
 echo
 echo -e "${YELLOW}⚠️  Final Notes:${NC}"
 if [ -z "${github_token:-}" ] || [ "$github_token" = "your_github_token_here" ]; then
