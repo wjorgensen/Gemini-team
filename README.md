@@ -1,575 +1,414 @@
-# 🏭 Gemini Coding Factory
+# 🚀 Gemini Coding Factory
 
-A **multi-repository AI development infrastructure** that transforms your server into a coding factory powered by **Gemini CLI**. Simply comment `@gemini` on any GitHub repository to trigger automated feature development across **any project type**.
+**Enterprise-grade AI development infrastructure** that transforms GitHub comments into automated feature development. Comment `@gemini` on any GitHub repository to trigger intelligent code generation with **real-time monitoring**.
 
-## 🎯 Multi-Repository Vision
+![Gemini Coding Factory Dashboard](https://img.shields.io/badge/Dashboard-Live%20Monitoring-blue) ![Queue System](https://img.shields.io/badge/Queue-BullMQ%20%2B%20Redis-red) ![Real-time](https://img.shields.io/badge/Real--time-Socket.io-green)
 
-This system acts as your **personal coding factory** that can handle:
+## ✨ **What You Get**
 
-### 🔧 **Any Project Type**
-- **Frontend**: Next.js, React, Vue.js, Angular
-- **Backend**: Node.js, Express, FastAPI, Django
-- **Blockchain**: Hardhat, Foundry, Solidity contracts
-- **Systems**: Rust, Go, Python, Docker projects
-- **Generic**: Any codebase with automatic detection
+- 🤖 **AI-Powered Development**: Comment `@gemini` to trigger automated feature development
+- 📊 **Real-time Dashboard**: Monitor jobs, view live logs, track queue health
+- 🔄 **Reliable Queue System**: BullMQ + Redis for robust job processing
+- 🛡️ **Quota Protection**: Automatic API quota management and recovery
+- 📱 **Professional UI**: Modern dashboard with live log streaming
+- 🏗️ **Multi-Repository**: Works with any project type (Next.js, React, Node.js, Python, Rust, etc.)
 
-### 🏗️ **Factory Architecture**
-- **Central Orchestrator**: Manages multiple repositories
-- **Smart Detection**: Automatically identifies project types
-- **Repository Manager**: Clones, fetches, and manages repo branches
-- **Composable Prompts**: Project-specific AI instructions
-- **Multi-Testing**: Runs appropriate tests for each project type
+## 🎯 **Installation**
 
-### 🚀 **Production Ready**
-- **Arch Linux Service**: Runs as systemd service on your server
-- **Docker Support**: Complete containerized development environment
-- **Webhook Driven**: Responds to GitHub events in real-time
-- **Branch Aware**: Works with PR branches automatically
-- **Multi-Tenant**: Handles multiple repositories simultaneously
+### **Automated Install (Recommended for Linux)**
 
-## 🚀 Quick Start (Arch Linux Server)
-
-### 1. Prerequisites
-
-- **Arch Linux Server** with sudo access
-- **Gemini API Key** (Google AI Studio or Vertex AI)
-- **GitHub Personal Access Token** with repo access
-- **Docker** (optional for development)
-- **Node.js 18+** and npm
-
-### 2. Installation
+This script automates the entire setup process, including dependency installation, Redis setup, and systemd service configuration for the backend.
 
 ```bash
 # Clone the repository
 git clone https://github.com/wjorgensen/Gemini-team.git
 cd Gemini-team
 
-# Run the installation script
+# Make the script executable and run it
 chmod +x deploy/install-arch.sh
 ./deploy/install-arch.sh
 ```
 
-### 3. Installation Process
+Follow the on-screen prompts. The script will ask for your Gemini API key and GitHub token, and create a `start-gemini-factory.sh` script to manage the services.
 
-The installation script will guide you through:
-1. **API Key Setup**: You'll be prompted for your Gemini API key
-2. **Interactive CLI Setup**: Choose your theme and confirm authentication  
-3. **Service Configuration**: Automatic setup of the background service
+### **Starting the Service (after automated install)**
 
-**Get your API key first:** https://aistudio.google.com/app/apikey
-
-During installation, you'll see the interactive CLI interface - follow these steps:
-- Choose your preferred theme (dark/light)
-- Select "Gemini API Key (AI Studio)" (should be pre-selected)
-- **Press Ctrl+C twice when setup is complete** to continue installation
-
-### 4. Service Configuration
-
-The installation script automatically configures your Gemini API key. You just need to add your GitHub token:
-
+After the script completes, you can manage the service with the generated scripts or `systemctl`:
 ```bash
-sudo nano /etc/gemini-coding-factory/environment
-```
+# Start all services (backend, dashboard, ngrok)
+./start-gemini-factory.sh
 
-Add your GitHub token and optional settings:
-```bash
-# GEMINI_API_KEY is already set during installation
-GITHUB_TOKEN=your_github_token_here
-WEBHOOK_SECRET=your_webhook_secret_here
-AUTHORIZED_USERS=wjorgensen
-```
+# Stop all services
+./stop-gemini-factory.sh
 
-### 5. Start the Service
-
-```bash
-# Enable and start the service
-sudo systemctl enable gemini-coding-factory.service
-sudo systemctl start gemini-coding-factory.service
-
-# Check status
+# Or control the backend service directly
 sudo systemctl status gemini-coding-factory.service
-```
-
-### 6. Set Up GitHub Webhooks
-
-#### **Generate Webhook Secret**
-```bash
-# Generate a secure random secret
-SECRET=$(openssl rand -hex 32)
-echo "Webhook secret: $SECRET"
-
-# Add it to your environment file
-sudo nano /etc/gemini-coding-factory/environment
-# Add: WEBHOOK_SECRET=your_generated_secret_here
-```
-
-#### **Configure Repository Webhooks**
-
-For each repository you want to use with Gemini:
-
-1. **Navigate to Repository Settings**
-   - Go to your GitHub repository
-   - Click **Settings** → **Webhooks** → **Add webhook**
-
-2. **Configure Webhook Settings**
-   - **Payload URL**: `http://your-server-ip:3000/webhook`
-     - *Replace `your-server-ip` with your actual server IP*
-     - *For local testing, use ngrok: `https://abc123.ngrok.io/webhook`*
-   - **Content type**: `application/json`
-   - **Secret**: Paste the webhook secret you generated above
-   - **Which events**: Select **"Let me select individual events"**
-     - ✅ **Issue comments** (this is what triggers Gemini)
-     - ❌ Uncheck all other events
-
-3. **Test the Webhook**
-   - Click **Add webhook**
-   - GitHub will send a test ping to your server
-   - Check that you see a green ✅ in the webhook list
-
-#### **For Local Development (No Port Forwarding)**
-
-If you can't port forward, use **ngrok**:
-
-```bash
-# Install ngrok (using AUR helper like yay)
-yay -S ngrok
-
-# Create free account at https://ngrok.com and get your authtoken
-ngrok authtoken YOUR_AUTHTOKEN
-
-# Expose your local server
-ngrok http 3000
-
-# Use the generated URL in GitHub webhook settings
-# Example: https://abc123.ngrok.io/webhook
-```
-
-### 7. Test Any Repository
-
-1. **Create a PR** on any repository (Next.js, Rust, Solidity, etc.)
-2. **Comment**: `@gemini Add user authentication with login and registration`
-3. **Watch Magic**: Gemini detects the project type and implements the feature!
-
-### 8. Troubleshooting
-
-#### **Gemini CLI Issues**
-
-| Problem | Solution |
-|---------|----------|
-| ❌ `GEMINI_API_KEY environment variable not found` | Re-run installation script for complete setup |
-| ❌ `gemini: command not found` | Install CLI: `sudo npm install -g @google/gemini-cli` |
-| ❌ Authentication errors | Check .env file has correct API key |
-| ❌ API key invalid | Get new key from https://aistudio.google.com/app/apikey |
-
-#### **Webhook Issues**
-
-#### **Check Webhook Status**
-```bash
-# Check if service is running
-sudo systemctl status gemini-coding-factory.service
-
-# View real-time logs
 sudo journalctl -u gemini-coding-factory.service -f
-
-# Test webhook endpoint manually
-curl -X POST http://localhost:3000/webhook -H "Content-Type: application/json" -d '{}'
 ```
 
-#### **Common Issues**
+### **Manual Installation (for macOS, Windows, or non-systemd Linux)**
 
-| Problem | Solution |
-|---------|----------|
-| ❌ Webhook shows red X in GitHub | Check server is running and accessible |
-| ❌ "Connection refused" | Verify port 3000 is open and service is running |
-| ❌ "Invalid signature" | Ensure webhook secret matches in both GitHub and environment file |
-| ❌ Nothing happens on `@gemini` comment | Check you're commenting on a PR (not issue) and user is authorized |
-| ❌ Can't access from outside | Use ngrok or configure port forwarding |
+**1. Prerequisites**
+- Node.js 18+
+- Git
+- A [Gemini API key](https://aistudio.google.com/app/apikey) (free)
+- A [GitHub token](https://github.com/settings/tokens) with repo access
+- Redis server installed and running
 
-#### **Test Webhook Delivery**
-1. Go to your GitHub repository webhook settings
-2. Click on your webhook
-3. Scroll down to **Recent Deliveries**
-4. Click on a delivery to see the request/response
-5. Look for HTTP 200 status (success) or error details
-
-## 📖 How It Works
-
-### Multi-Repository Workflow
-
-```mermaid
-graph TD
-    A[PR Comment @gemini] --> B[Webhook Server]
-    B --> C[Repository Manager]
-    C --> D{Repo Exists?}
-    D -->|No| E[Clone Repository]
-    D -->|Yes| F[Fetch & Update]
-    E --> G[Checkout PR Branch]
-    F --> G
-    G --> H[Project Detector]
-    H --> I[Detect Project Type]
-    I --> J[Load Configuration]
-    J --> K[Build Custom Prompt]
-    K --> L[Run Gemini Agent]
-    L --> M[Create Feature Plan]
-    M --> N[Implement Features]
-    N --> O[Run Tests]
-    O --> P{Tests Pass?}
-    P -->|No| Q[Fix Issues]
-    Q --> O
-    P -->|Yes| R[Commit & Push]
-    R --> S[Post Results to PR]
-```
-
-### Intelligent Project Detection
-
-The system automatically detects project types by examining:
-
-**Frontend Projects**
-- Next.js (detects `next.config.js`, App Router)
-- React (detects `package.json` with React)
-- Vue.js (detects Vue dependencies)
-
-**Backend Projects**  
-- Node.js/Express (detects Express in `package.json`)
-- FastAPI (detects `main.py` + `requirements.txt`)
-- Django (detects `manage.py`)
-
-**Blockchain Projects**
-- Hardhat (detects `hardhat.config.js`)
-- Foundry (detects `foundry.toml`)
-- Raw Solidity (detects `.sol` files)
-
-**Systems Projects**
-- Rust (detects `Cargo.toml`)
-- Go (detects `go.mod`)
-- Python (detects `requirements.txt`)
-
-### Composable Development Protocol
-
-Each project type gets a customized protocol:
-
-1. **Smart Analysis**
-   - Analyzes codebase structure and patterns
-   - Understands existing architecture
-   - Identifies dependencies and constraints
-
-2. **Project-Specific Planning**
-   - Creates `feature-plan.md` with project-aware tasks
-   - Uses framework-specific best practices
-   - Plans appropriate testing strategy
-
-3. **Intelligent Implementation**
-   - Follows project conventions automatically
-   - Uses correct testing frameworks
-   - Applies proper linting and formatting
-
-4. **Adaptive Testing**
-   - Playwright for frontend projects
-   - Jest/pytest for backend
-   - Hardhat/Foundry tests for blockchain
-   - Cargo test for Rust, go test for Go
-
-5. **Quality Assurance**
-   - Runs project-specific quality checks
-   - Ensures code passes all existing tests
-   - Maintains project coding standards
-
-## 🎮 Multi-Repository Usage Examples
-
-### Frontend Projects (Next.js/React)
-```
-@gemini Create a responsive user dashboard with:
-- User profile management
-- Dark mode toggle
-- Real-time notifications
-- Mobile-first design with Tailwind CSS
-```
-
-### Backend API Projects (Node.js/FastAPI)
-```
-@gemini Implement a REST API for user management:
-- User registration and authentication
-- JWT token handling
-- Input validation and error handling
-- Comprehensive test coverage
-```
-
-### Blockchain Projects (Hardhat/Foundry)
-```
-@gemini Create an ERC-721 NFT contract with:
-- Minting functionality with role-based access
-- Metadata support with IPFS integration
-- Gas optimization
-- Complete test suite with edge cases
-```
-
-### Systems Projects (Rust/Go)
-```
-@gemini Build a CLI tool for file processing:
-- Command-line argument parsing
-- Async file operations
-- Error handling with proper logging
-- Unit tests and documentation
-```
-
-### Docker Projects
-```
-@gemini Optimize the Docker setup:
-- Multi-stage build optimization
-- Security hardening
-- Health checks
-- Docker Compose for development
-```
-
-### Cross-Project Features
-```
-@gemini Add comprehensive logging:
-- Structured logging with appropriate levels
-- Log rotation and management
-- Performance monitoring hooks
-- Integration with existing architecture
-```
-
-## 🛠️ Local Development
-
-### Using Docker (Recommended)
-
+**2. Clone & Install Dependencies**
 ```bash
-# Build and start the development environment
-docker-compose up
+# Clone the repository
+git clone https://github.com/wjorgensen/Gemini-team.git
+cd Gemini-team
 
-# Or for specific profiles
-docker-compose --profile testing up    # Include testing environment
-docker-compose --profile webhook up    # Include webhook listener
-```
-
-### Manual Setup
-
-```bash
-# Install dependencies
+# Install backend dependencies
 npm install
 
-# Install Playwright browsers
-npm run setup
-
-# Start development server
-npm run dev
-
-# Run tests
-npm run test:e2e
+# Install dashboard dependencies
+cd dashboard && npm install && cd ..
 ```
 
-### Testing the Agent Locally
-
+**3. Configure Environment**
 ```bash
-# Build Docker image
-npm run docker:build
-
-# Run agent in container
-npm run docker:run
-
-# Test Gemini CLI integration
-npm run gemini:test
-```
-
-## 📁 Project Structure
-
-```
-gemini-background-agent/
-├── .github/workflows/
-│   └── gemini.yml                 # GitHub Actions workflow
-├── app/                           # Next.js app directory
-│   ├── layout.tsx                # Root layout
-│   ├── page.tsx                  # Homepage
-│   └── globals.css               # Global styles
-├── e2e/                          # Playwright E2E tests
-│   ├── global-setup.ts           # Test setup
-│   ├── global-teardown.ts        # Test cleanup
-│   └── homepage.spec.ts          # Example test
-├── scripts/
-│   └── gemini-prompt-template.txt # Reusable prompt template
-├── docker-compose.yml            # Docker services
-├── Dockerfile                    # Container definition
-├── package.json                  # Dependencies and scripts
-├── playwright.config.ts          # Playwright configuration
-├── GEMINI.md                     # Project guidelines for Gemini
-└── README.md                     # This file
-```
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env.local` file:
-
-```bash
-# Required
+# Create environment file
+cat > .env << EOF
+# Required: Get from https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
+
+# Required: Get from https://github.com/settings/tokens
 GITHUB_TOKEN=your_github_token_here
 
-# Optional
-NODE_ENV=development
-BASE_URL=http://localhost:3000
-WEBHOOK_SECRET=your_webhook_secret
+# Optional: Webhook security
+WEBHOOK_SECRET=$(openssl rand -hex 32)
+
+# Optional: Authorized users (comma-separated)
+AUTHORIZED_USERS=your_github_username
+EOF
+
+# Edit with your actual values
+nano .env
 ```
 
-### Customizing the Agent
-
-1. **Project Guidelines**: Edit `GEMINI.md` to customize coding standards
-2. **Prompt Template**: Modify `scripts/gemini-prompt-template.txt` for different behavior
-3. **Workflow Triggers**: Adjust `.github/workflows/gemini.yml` for different trigger conditions
-
-### Adding New Test Categories
-
-Update `playwright.config.ts` to add new test configurations:
-
-```typescript
-projects: [
-  {
-    name: 'api-tests',
-    testDir: './e2e/api',
-    use: { ...devices['Desktop Chrome'] },
-  },
-  // ... other projects
-]
-```
-
-## 🧪 Testing Strategy
-
-### Test Categories
-
-1. **Unit Tests**: Jest for component and utility testing
-2. **E2E Tests**: Playwright for full user workflow testing
-3. **Integration Tests**: API route and database interaction testing
-
-### Running Tests
-
+**4. Build and Start Manually**
 ```bash
-# All tests
-npm test
+# Build the backend
+npm run build
 
-# E2E tests only
-npm run test:e2e
+# Start the backend (in one terminal)
+npm start
 
-# E2E with UI
-npm run test:e2e:ui
-
-# E2E in headed mode (see browser)
-npm run test:e2e:headed
-
-# Debug mode
-npm run test:e2e:debug
+# Start the dashboard (in another terminal)
+cd dashboard && npm run dev
 ```
 
-### Test Best Practices
+### **Access Your System**
+- 🖥️ **Backend API**: http://localhost:5000
+- 📊 **Dashboard**: http://localhost:3000
+- ✅ **Health Check**: http://localhost:5000/health
 
-- Use `data-testid` attributes for reliable element selection
-- Test user behavior, not implementation details
-- Keep tests independent and deterministic
-- Use page object pattern for complex workflows
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Gemini CLI not configured**
-```bash
-# Re-run the installation script
-./deploy/install-arch.sh
-# The script includes interactive CLI setup
-```
-
-**Gemini CLI not found**
-```bash
-sudo npm install -g @google/gemini-cli
-```
-
-**Environment variable not found error**
-```bash
-# Check .env file exists in project directory
-cat .env
-
-# If missing, re-run installation
-./deploy/install-arch.sh
-```
-
-**Playwright browsers missing**
-```bash
-npx playwright install --with-deps
-```
-
-**GitHub Action fails with permissions**
-- Ensure `GEMINI_API_KEY` is set in repository secrets
-- Check that the GitHub token has appropriate permissions
-
-**Tests fail locally but pass in CI**
-- Check viewport and timing differences
-- Ensure test data is properly isolated
-- Verify network conditions
-
-### Debug Mode
-
-Enable debug logging:
-
-```bash
-DEBUG=pw:* npm run test:e2e  # Playwright debug
-NODE_ENV=development npm run dev  # Next.js debug
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Test your changes locally
-4. Submit a PR with a clear description
-
-### Development Workflow
-
-1. **Local Testing**: Use `@gemini` comments on test PRs
-2. **Docker Testing**: Validate in containerized environment
-3. **Documentation**: Update README for new features
-
-## 📚 Advanced Usage
-
-### Multiple Agents (Future)
-
-The architecture supports running multiple Gemini agents in parallel:
-
-```yaml
-# In GitHub Actions
-strategy:
-  matrix:
-    agent: [frontend, backend, testing]
-```
-
-### Custom MCP Tools
-
-Integrate additional MCP (Model Context Protocol) tools:
-
-```bash
-# Example: Add database MCP tool
-npm install @mcp/database-tools
-```
-
-### Webhook Integration
-
-For real-time local development:
-
-```bash
-# Start webhook listener
-docker-compose --profile webhook up
-```
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Issues**: [GitHub Issues](https://github.com/wjorgensen/gemini/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/wjorgensen/gemini/discussions)
-- **Documentation**: This README and `GEMINI.md`
+**That's it!** 🎉 Your Gemini Coding Factory is running.
 
 ---
 
-**Built with ❤️ using Gemini CLI, Next.js, TypeScript, Tailwind CSS, and Playwright** 
+## 🔗 **GitHub Integration**
+
+### **Setup Webhooks**
+
+1. **Go to your repository** → **Settings** → **Webhooks** → **Add webhook**
+
+2. **Configure webhook**:
+   - **Payload URL**: `http://your-server:5000/webhook` 
+   - **Content type**: `application/json`
+   - **Secret**: Use the `WEBHOOK_SECRET` from your `.env` file
+   - **Events**: Select **"Issue comments"** only
+
+3. **For local testing**, use [ngrok](https://ngrok.com):
+   ```bash
+   # Install and setup ngrok
+   npm install -g ngrok
+   ngrok http 5000
+   
+   # Use the generated URL: https://abc123.ngrok.io/webhook
+   ```
+
+### **Test It Out**
+
+1. **Create a pull request** in any repository
+2. **Comment**: `@gemini Add user authentication with login and signup`
+3. **Watch the magic** in your dashboard at http://localhost:3000
+
+---
+
+## 📊 **Dashboard Features**
+
+### **Real-time Monitoring**
+- 🟢 **Live connection status** - See if your system is connected
+- 📈 **Queue statistics** - Active, waiting, completed, and failed jobs
+- 🃏 **Job overview cards** - Status, repository, user, and progress
+- ⚡ **Instant updates** - Everything updates in real-time
+
+### **Live Log Streaming**  
+- 💻 **Terminal viewer** - Dark theme with syntax highlighting
+- 🔴🟢 **Color-coded logs** - Green for stdout, red for stderr
+- 📥 **Download logs** - Export complete job logs
+- 🔄 **Auto-scroll** - Automatically follows latest output
+
+### **Queue Health**
+- 📊 **Success rates** - Visual progress bars and percentages
+- ⏳ **Processing times** - Track job durations
+- 🚦 **Quota monitoring** - Automatic pause/resume on API limits
+- 📈 **Historical data** - Track performance over time
+
+---
+
+## 🛠️ **Development**
+
+### **Start in Development Mode**
+```bash
+# Backend with hot reload
+npm run dev
+
+# Dashboard with hot reload (separate terminal)
+cd dashboard && npm run dev
+```
+
+### **Project Structure**
+```
+gemini/
+├── src/                     # Backend source
+│   ├── services/           
+│   │   ├── queue.ts        # BullMQ job queue
+│   │   ├── worker.ts       # Job processing
+│   │   ├── events.ts       # Socket.io events
+│   │   └── webhook-server.ts # Express server
+│   └── types/              # TypeScript types
+├── dashboard/              # Next.js dashboard
+│   ├── src/
+│   │   ├── app/           # App router pages
+│   │   ├── components/    # React components
+│   │   └── lib/           # Utilities & hooks
+│   └── public/            # Static assets
+└── deploy/                # Deployment scripts
+```
+
+### **Available Scripts**
+
+**Backend**:
+```bash
+npm run dev          # Development with hot reload
+npm run build        # Production build
+npm start            # Start production server
+npm run test         # Run tests
+```
+
+**Dashboard**:
+```bash
+npm run dev          # Development server (port 3000)
+npm run build        # Production build  
+npm start            # Start production server
+npm run lint         # Lint code
+```
+
+---
+
+## 🚀 **Production Deployment**
+
+### **Docker Deployment**
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
+
+# Or build individual services
+docker build -t gemini-backend .
+docker build -t gemini-dashboard ./dashboard
+```
+
+### **Traditional Server Deployment**
+```bash
+# Install PM2 for process management
+npm install -g pm2
+
+# Start backend with PM2
+pm2 start npm --name "gemini-backend" -- start
+
+# Start dashboard with PM2  
+cd dashboard && pm2 start npm --name "gemini-dashboard" -- start
+
+# Save PM2 configuration
+pm2 save && pm2 startup
+```
+
+### **Environment Variables**
+```bash
+# Production environment
+NODE_ENV=production
+WEBHOOK_PORT=5000
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Dashboard configuration  
+NEXT_PUBLIC_WS_URL=http://your-server:5000
+```
+
+---
+
+## 🔧 **Troubleshooting**
+
+### **Common Issues**
+
+**❌ Redis connection failed**
+```bash
+# Check if Redis is running
+redis-cli ping
+# Should return: PONG
+
+# Start Redis if not running
+redis-server
+```
+
+**❌ Dashboard shows "Disconnected"**
+```bash
+# Check backend is running
+curl http://localhost:5000/health
+
+# Check Socket.io connection
+curl http://localhost:5000/socket.io/
+```
+
+**❌ Jobs stuck in "Waiting"**
+```bash
+# Check worker is running
+npm run build && node dist/services/worker.js
+
+# Check Redis queue
+redis-cli LLEN bull:gemini-jobs:waiting
+```
+
+**❌ Webhook not working**
+```bash
+# Test webhook endpoint
+curl -X POST http://localhost:5000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}'
+
+# Check logs
+npm run build && npm start
+```
+
+### **Debug Mode**
+```bash
+# Enable debug logging
+DEBUG=* npm start
+
+# Check queue status
+curl http://localhost:5000/status
+```
+
+### **Reset Everything**
+```bash
+# Clear Redis data
+redis-cli FLUSHALL
+
+# Restart services
+npm run build && npm start
+cd dashboard && npm run build && npm start
+```
+
+---
+
+## 📖 **How It Works**
+
+### **Architecture Overview**
+```
+GitHub Comment → Webhook → Express Server → BullMQ Queue → Worker → Gemini CLI
+                                    ↓
+                            Socket.io Events  
+                                    ↓
+                            Dashboard Updates (Real-time)
+```
+
+### **Job Processing Flow**
+
+1. **Webhook Reception**: GitHub comment triggers webhook
+2. **Job Creation**: System creates BullMQ job with metadata
+3. **Queue Processing**: Worker picks up job from Redis queue  
+4. **Repository Setup**: Clone/fetch repository and checkout PR branch
+5. **Project Detection**: Automatically detect project type (Next.js, React, etc.)
+6. **Prompt Building**: Create project-specific prompts
+7. **Gemini Execution**: Run Gemini CLI with proper arguments
+8. **Live Streaming**: Stream logs in real-time to dashboard
+9. **Result Posting**: Post results back to GitHub PR
+
+### **Quota Protection System**
+
+- **Automatic Detection**: Monitors API responses for quota errors
+- **Intelligent Pausing**: Pauses queue when quota exhausted  
+- **Auto-Resume**: Automatically resumes when quota resets
+- **Dashboard Alerts**: Real-time notifications of quota status
+
+---
+
+## 🎯 **Usage Examples**
+
+### **Frontend Development**
+```
+@gemini Create a responsive user dashboard with:
+- User profile management  
+- Dark mode toggle
+- Real-time notifications
+- Mobile-first Tailwind CSS design
+```
+
+### **Backend APIs**
+```
+@gemini Implement user authentication API:
+- JWT token handling
+- Password hashing with bcrypt
+- Input validation
+- Comprehensive test coverage
+```
+
+### **UI Components**
+```
+@gemini Build a reusable component library:
+- Button, Input, Modal components
+- TypeScript interfaces
+- Storybook documentation  
+- Jest unit tests
+```
+
+### **Database Integration**
+```
+@gemini Add PostgreSQL integration:
+- Database schema design
+- Prisma ORM setup
+- Migration scripts
+- Connection pooling
+```
+
+---
+
+## 🏆 **Enterprise Features**
+
+- ✅ **Reliable Queue System**: BullMQ with Redis for job persistence
+- ✅ **Real-time Monitoring**: Professional dashboard with live updates
+- ✅ **Automatic Recovery**: Queue pauses and resumes on API limits
+- ✅ **Memory Safety**: Bounded log streaming prevents crashes
+- ✅ **Rate Limiting**: Express middleware prevents abuse
+- ✅ **Error Handling**: Comprehensive error tracking and reporting
+- ✅ **Scalable Architecture**: Horizontal scaling with Redis
+- ✅ **Production Ready**: PM2 integration and Docker support
+
+---
+
+## 📞 **Support**
+
+- 📚 **Documentation**: Check the `/dashboard` README for dashboard details
+- 🐛 **Issues**: Report bugs on [GitHub Issues](https://github.com/wjorgensen/Gemini-team/issues)  
+- 💬 **Discussions**: Join [GitHub Discussions](https://github.com/wjorgensen/Gemini-team/discussions)
+
+---
+
+**Ready to transform your development workflow?** 🚀
+
+Get started in 5 minutes and watch your GitHub comments become production-ready features! 

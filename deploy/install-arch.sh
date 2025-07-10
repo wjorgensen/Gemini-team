@@ -16,9 +16,14 @@ NC='\033[0m' # No Color
 SERVICE_USER="wes"
 SERVICE_GROUP="wes"
 APP_DIR="/home/${SERVICE_USER}/gemini-coding-factory"
+DASHBOARD_DIR="/home/${SERVICE_USER}/gemini-coding-factory/dashboard"
 WORKSPACE_DIR="/home/${SERVICE_USER}/coding-factory"
-CONFIG_DIR="/etc/gemini-coding-factory"
+GEMINI_CONFIG_DIR="/home/${SERVICE_USER}/.gemini"
 LOG_DIR="/var/log/gemini-coding-factory"
+
+# Global variables for installation options
+INSTALL_NGROK=false
+NGROK_AUTHTOKEN=""
 
 echo -e "${BLUE}🤖 Gemini Coding Factory Installation Script${NC}"
 echo -e "${BLUE}Setting up multi-repository AI development service on Arch Linux${NC}"
@@ -102,7 +107,7 @@ fi
 print_step "Checking system dependencies..."
 
 # Check for required tools
-REQUIRED_COMMANDS=("git" "node" "npm" "docker" "docker-compose")
+REQUIRED_COMMANDS=("git" "node" "npm" "docker" "docker-compose" "redis-server" "tmux")
 MISSING_COMMANDS=()
 
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
@@ -125,6 +130,8 @@ if [ ${#MISSING_COMMANDS[@]} -ne 0 ]; then
             "npm") PACKAGES_TO_INSTALL+=("npm") ;;
             "docker") PACKAGES_TO_INSTALL+=("docker") ;;
             "docker-compose") PACKAGES_TO_INSTALL+=("docker-compose") ;;
+            "redis-server") PACKAGES_TO_INSTALL+=("redis") ;;
+            "tmux") PACKAGES_TO_INSTALL+=("tmux") ;;
         esac
     done
     
@@ -164,6 +171,82 @@ if command -v docker &> /dev/null; then
     fi
 fi
 
+# Start and enable Redis service if installed
+if command -v redis-server &> /dev/null; then
+    print_step "Setting up Redis service..."
+    
+    print_separator "Configuring Redis Service"
+    if ! systemctl is-active --quiet redis; then
+        run_command "sudo systemctl start redis" "Starting Redis service"
+        print_success "Redis service started"
+    else
+        echo -e "  ${GREEN}✓${NC} Redis service already running"
+    fi
+    
+    if ! systemctl is-enabled --quiet redis; then
+        run_command "sudo systemctl enable redis" "Enabling Redis service for auto-start"
+        print_success "Redis service enabled"
+    else
+        echo -e "  ${GREEN}✓${NC} Redis service already enabled"
+    fi
+fi
+
+# Ask about ngrok installation
+echo
+print_separator "Optional: ngrok Setup"
+echo -e "${BLUE}🌐 Do you want to install ngrok for public webhook access?${NC}"
+echo -e "  ${YELLOW}▶${NC} This allows GitHub webhooks to reach your local development server"
+echo -e "  ${YELLOW}▶${NC} Useful for testing and development without port forwarding"
+echo -e "  ${BLUE}▶${NC} You'll need an ngrok account (free at https://ngrok.com)"
+echo
+read -p "Install and configure ngrok? (y/N): " install_ngrok_choice
+
+if [[ "$install_ngrok_choice" =~ ^[Yy]$ ]]; then
+    INSTALL_NGROK=true
+    
+    # Install ngrok
+    if ! command -v ngrok &> /dev/null; then
+        print_step "Installing ngrok..."
+        
+        # Check if AUR helper is available (yay, paru, etc.)
+        if command -v yay &> /dev/null; then
+            run_command "yay -S --needed --noconfirm ngrok" "Installing ngrok via yay"
+        elif command -v paru &> /dev/null; then
+            run_command "paru -S --needed --noconfirm ngrok" "Installing ngrok via paru"
+        else
+            print_warning "No AUR helper found. Installing ngrok manually..."
+            # Manual installation from GitHub releases
+            NGROK_VERSION="v3-stable"
+            NGROK_URL="https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.tgz"
+            
+            run_command "cd /tmp && curl -O '$NGROK_URL'" "Downloading ngrok"
+            run_command "cd /tmp && tar -xzf ngrok-stable-linux-amd64.tgz" "Extracting ngrok"
+            run_command "sudo mv /tmp/ngrok /usr/local/bin/" "Installing ngrok to /usr/local/bin"
+            run_command "sudo chmod +x /usr/local/bin/ngrok" "Setting executable permissions"
+        fi
+        print_success "ngrok installed successfully"
+    else
+        echo -e "  ${GREEN}✓${NC} ngrok already installed"
+    fi
+    
+    # Get ngrok authtoken
+    echo
+    echo -e "${BLUE}🔑 Please enter your ngrok authtoken:${NC}"
+    echo -e "  ${YELLOW}▶${NC} Get it from: https://dashboard.ngrok.com/get-started/your-authtoken"
+    echo -e "  ${YELLOW}▶${NC} Sign up for free at: https://ngrok.com"
+    read -r -s ngrok_authtoken
+    
+    if [ -n "$ngrok_authtoken" ]; then
+        NGROK_AUTHTOKEN="$ngrok_authtoken"
+        run_command "ngrok config add-authtoken '$NGROK_AUTHTOKEN'" "Configuring ngrok authtoken"
+        print_success "ngrok authtoken configured"
+    else
+        print_warning "No ngrok authtoken provided. You can configure it later with: ngrok config add-authtoken YOUR_TOKEN"
+    fi
+else
+    echo -e "  ${BLUE}ℹ️${NC}  Skipping ngrok installation"
+fi
+
 print_step "Setting up directories..."
 
 print_separator "Creating System Directories"
@@ -188,7 +271,7 @@ print_step "Installing Gemini CLI..."
 # Install Gemini CLI globally with proper permissions
 if ! command -v gemini &> /dev/null; then
     print_separator "Installing Gemini CLI"
-    run_command "sudo npm install -g @google/gemini-cli" "Installing @google/gemini-cli package globally"
+    run_command "sudo npm install -g @google/gemini-cli@nightly" "Installing @google/gemini-cli package globally"
     print_success "Gemini CLI installed successfully"
 else
     echo "Gemini CLI already installed"
@@ -196,7 +279,7 @@ else
     if ! npm list -g @google/gemini-cli &> /dev/null; then
         print_warning "Found 'gemini' command but not the correct package. Installing @google/gemini-cli..."
         print_separator "Updating Gemini CLI"
-        run_command "sudo npm install -g @google/gemini-cli" "Installing correct @google/gemini-cli package"
+        run_command "sudo npm install -g @google/gemini-cli@nightly" "Installing correct @google/gemini-cli package"
         print_success "Correct Gemini package installed"
     fi
 fi
@@ -297,6 +380,257 @@ else
     echo "You can reconfigure later if needed"
 fi
 
+echo
+print_step "Setting up global Gemini CLI configuration..."
+
+print_separator "Creating Global Gemini Configuration"
+# Create global .gemini directory
+GEMINI_GLOBAL_DIR="/home/$SERVICE_USER/.gemini"
+if [ ! -d "$GEMINI_GLOBAL_DIR" ]; then
+    run_quiet_command "mkdir -p '$GEMINI_GLOBAL_DIR'" "Creating global Gemini directory: $GEMINI_GLOBAL_DIR"
+fi
+
+# Create comprehensive environment file with all service configuration
+GLOBAL_ENV_FILE="$GEMINI_GLOBAL_DIR/.env"
+echo -e "  ${YELLOW}▶${NC} Creating comprehensive .env file for service and CLI..."
+
+# Get GitHub token from user
+echo
+echo -e "${BLUE}Please enter your GitHub Personal Access Token:${NC}"
+echo "(Get one from: https://github.com/settings/tokens)"
+echo "Required scopes: repo, write:repo_hook"
+read -r -s github_token
+
+if [ -z "$github_token" ]; then
+    print_warning "No GitHub token provided. You'll need to add it to .env later."
+    github_token="your_github_token_here"
+fi
+
+# Create comprehensive .env file
+cat > "$GLOBAL_ENV_FILE" << EOL
+# Gemini Coding Factory Environment Configuration
+# This file contains all required environment variables
+
+# Required: Gemini API Key from Google AI Studio or Vertex AI
+GEMINI_API_KEY=$api_key
+
+# Required: GitHub Personal Access Token with repo access
+GITHUB_TOKEN=$github_token
+
+# Optional: Webhook secret for GitHub webhooks (recommended)
+WEBHOOK_SECRET=gemini-factory-$(openssl rand -hex 16)
+
+# Optional: Authorized users (comma-separated GitHub usernames)
+AUTHORIZED_USERS=$SERVICE_USER
+
+# Optional: CORS origins (comma-separated)
+CORS_ORIGINS=*
+
+# Optional: Custom workspace location
+WORKSPACE_ROOT=$WORKSPACE_DIR
+
+# Optional: Custom ports
+PORT=5000
+DASHBOARD_PORT=3000
+
+# Optional: Log level (debug, info, warn, error)
+LOG_LEVEL=info
+
+# Redis configuration
+REDIS_URL=redis://localhost:6379
+
+# BullMQ configuration
+QUEUE_NAME=gemini-jobs
+EOL
+
+echo -e "  ${GREEN}✓${NC} Comprehensive .env file created with service configuration"
+
+# Create comprehensive GEMINI.md file with all workflow instructions
+GEMINI_MD_FILE="$GEMINI_GLOBAL_DIR/GEMINI.md"
+echo -e "  ${YELLOW}▶${NC} Creating global GEMINI.md with comprehensive development workflow..."
+
+cat > "$GEMINI_MD_FILE" << 'EOL'
+# Gemini Coding Factory Development Protocol
+
+You are a senior AI developer working autonomously in a multi-repository coding factory. You have access to Git operations, file I/O, and command execution for any project type.
+
+## Core Development Workflow
+
+### 1. Analysis Phase
+- **Understand the Request**: Carefully analyze the feature request in the project context
+- **Explore Codebase**: Study existing structure, patterns, and architecture  
+- **Identify Dependencies**: Check for prerequisites, conflicts, or breaking changes
+- **Assess Complexity**: Determine scope and potential risks
+
+### 2. Planning Phase
+- **Create Feature Plan**: Generate `feature-plan.md` in repository root with:
+  - Clear objective summary
+  - Technical design considering existing architecture
+  - **GitHub-style task checklist** (`- [ ] task description`)
+  - Complexity assessment and risk analysis
+- **Initial Commit**: `📋 Create feature plan for: [brief description]`
+
+### 3. Implementation Loop
+For each unchecked task in your checklist:
+
+**a. Implement Changes**
+- Write code following project's existing patterns
+- Maintain consistency with established architecture
+- Follow language-specific best practices
+
+**b. Test Locally**
+- Run appropriate tests for the project type
+- Verify functionality works as expected
+- Check for regressions or breaking changes
+
+**c. Commit Changes**
+- Use descriptive commit messages matching the task
+- Keep commits atomic and focused
+- Follow conventional commit format when appropriate
+
+**d. Update Progress**
+- Check off completed task (`- [x] task description`)
+- Commit checklist update: `✅ Complete: [task description]`
+
+### 4. Testing Phase
+- **Run Test Suite**: Execute project's configured test commands
+- **Fix Failures**: Debug and resolve any test failures systematically
+- **Add Tests**: Create new tests for new functionality using project's testing framework
+- **Verify Coverage**: Ensure adequate test coverage for new features
+
+### 5. Quality Assurance
+- **Linting**: Run configured linting tools (ESLint, Prettier, etc.)
+- **Formatting**: Apply consistent code formatting
+- **Style Guidelines**: Follow project's established coding standards
+- **Performance**: Verify changes don't negatively impact performance
+
+### 6. Completion
+- **Final Verification**: Ensure ALL checklist items are checked ✅
+- **Test Confirmation**: Confirm all tests pass 🟢
+- **Final Commit**: `🎉 Feature complete: [feature name]`
+- **Documentation**: Update relevant documentation if needed
+
+## Project-Specific Guidelines
+
+### Next.js Projects
+- Use TypeScript strictly (no `any` types)
+- Follow App Router patterns when available
+- Implement proper SEO with metadata API
+- Use Next.js Image component for images
+- Create responsive designs with Tailwind CSS
+- Generate Playwright E2E tests for UI features
+- Use Server Components when possible, Client Components when necessary
+
+### React Projects
+- Use functional components with hooks exclusively
+- Implement proper state management (useState, useReducer, Context)
+- Follow React performance best practices (useMemo, useCallback)
+- Create reusable components with proper TypeScript interfaces
+- Write Jest/React Testing Library tests for components
+
+### Node.js API Projects
+- Implement comprehensive error handling with try-catch
+- Use middleware for cross-cutting concerns (auth, logging, validation)
+- Validate input data with appropriate libraries
+- Use proper HTTP status codes
+- Document API endpoints thoroughly
+- Write unit tests for all endpoints using Jest
+- Follow RESTful design principles
+
+### Smart Contract Projects (Hardhat/Foundry)
+- Write secure Solidity code following best practices
+- Implement comprehensive test coverage
+- Use gas optimization techniques
+- Follow OpenZeppelin patterns for common functionality
+- Implement proper access controls and security measures
+- Create deployment scripts for different networks
+
+### Python Projects
+- Use type hints throughout the codebase
+- Follow PEP 8 style guidelines strictly
+- Implement proper error handling with custom exceptions
+- Use virtual environments and requirements.txt
+- Write comprehensive tests with pytest
+- Document functions and classes with docstrings
+
+### Django Projects
+- Follow Django model best practices
+- Use Django's built-in authentication and authorization
+- Implement proper URL patterns and view structure
+- Use Django templates with proper context
+- Write Django tests using TestCase
+- Follow Django security best practices
+
+### Rust Projects
+- Follow Rust ownership and borrowing principles
+- Use Result<T, E> for error handling
+- Implement proper trait bounds and generics
+- Write comprehensive tests with #[cfg(test)]
+- Use cargo fmt and cargo clippy
+- Follow Rust naming conventions
+
+### Go Projects
+- Follow Go naming conventions and style guidelines
+- Use interfaces for abstraction
+- Implement proper error handling with error returns
+- Use goroutines and channels for concurrency when appropriate
+- Write table-driven tests
+- Follow Go project structure conventions
+
+## Core Constraints
+
+### Universal Rules
+- **NO MERGING**: Never merge or close PRs - leave for human review
+- **Code Quality First**: Prioritize maintainability over speed
+- **Atomic Commits**: Keep commits focused and descriptive
+- **Test Coverage**: Ensure adequate testing for all new functionality
+- **Documentation**: Update relevant docs for significant changes
+
+### Error Handling
+- Debug systematically when encountering errors
+- Document debugging approach in commit messages
+- If stuck, explain the issue clearly and ask for guidance
+- Always provide context about what was attempted
+
+### Security Considerations
+- Follow security best practices for the language/framework
+- Never commit secrets or sensitive information
+- Use environment variables for configuration
+- Implement proper input validation and sanitization
+
+### Performance Guidelines
+- Consider performance implications of changes
+- Use appropriate data structures and algorithms
+- Optimize for readability first, then performance
+- Measure before optimizing
+
+## Success Criteria
+
+A feature is considered complete when:
+- ✅ All checklist items are checked off
+- 🟢 All tests pass (existing + new)
+- 📋 Code follows project patterns and standards
+- 🔒 No security vulnerabilities introduced
+- 📚 Documentation updated as needed
+- 🎯 Feature works as specified in the request
+
+Remember: Quality and thoroughness are more important than speed. Take time to understand the project and implement features that are maintainable and well-tested.
+EOL
+
+echo -e "  ${GREEN}✓${NC} Global GEMINI.md created with comprehensive workflow (reduces prompt size by 80%)"
+
+# Set proper ownership for global Gemini directory
+run_quiet_command "chown -R '$SERVICE_USER:$SERVICE_GROUP' '$GEMINI_GLOBAL_DIR'" "Setting ownership for global Gemini directory"
+run_quiet_command "chmod 755 '$GEMINI_GLOBAL_DIR'" "Setting permissions for global Gemini directory"
+run_quiet_command "chmod 600 '$GLOBAL_ENV_FILE'" "Setting secure permissions for global .env file"
+run_quiet_command "chmod 644 '$GEMINI_MD_FILE'" "Setting permissions for global GEMINI.md file"
+
+print_success "✅ Global Gemini configuration created successfully"
+echo -e "  ${BLUE}📁${NC} Global .env: $GLOBAL_ENV_FILE"
+echo -e "  ${BLUE}📋${NC} Global GEMINI.md: $GEMINI_MD_FILE"
+echo -e "  ${BLUE}💡${NC} Gemini CLI will now use these files globally"
+echo -e "  ${BLUE}🚀${NC} Prompt size reduced from ~5000+ chars to ~1500 chars"
+
 # Return to app directory for rest of installation
 cd "$APP_DIR"
 
@@ -312,7 +646,20 @@ run_quiet_command "cp -r '$REPO_DIR'/.* '$APP_DIR/' 2>/dev/null || true" "Copyin
 cd "$APP_DIR"
 
 print_separator "Installing Node.js Dependencies"
-run_command "npm install" "Installing dependencies and building project (this includes TypeScript compilation)"
+run_command "npm install" "Installing backend dependencies"
+
+# Install dashboard dependencies
+if [ -d "$DASHBOARD_DIR" ]; then
+    echo -e "  ${YELLOW}▶${NC} Installing Next.js dashboard dependencies..."
+    cd "$DASHBOARD_DIR"
+    run_command "npm install" "Installing dashboard dependencies"
+    cd "$APP_DIR"
+else
+    print_warning "Dashboard directory not found, skipping dashboard dependency installation"
+fi
+
+print_separator "Building Project"
+run_command "npm run build" "Building the project"
 
 print_separator "Cleaning Up Development Dependencies"
 run_command "npm prune --production" "Removing development dependencies for production"
@@ -389,61 +736,208 @@ else
     print_success "✅ All Playwright dependencies satisfied"
 fi
 
-print_step "Setting up configuration..."
+print_step "Creating unified start script..."
 
-print_separator "Creating Configuration Files"
-# Create config directory (requires sudo)
-if [ ! -d "$CONFIG_DIR" ]; then
-    run_command "sudo mkdir -p '$CONFIG_DIR'" "Creating configuration directory: $CONFIG_DIR"
+print_separator "Creating Unified Start Script"
+# Create the start script
+START_SCRIPT="/home/$SERVICE_USER/start-gemini-factory.sh"
+echo -e "  ${YELLOW}▶${NC} Creating unified start script..."
+
+cat > "$START_SCRIPT" << EOL
+#!/bin/bash
+
+# Gemini Coding Factory Unified Start Script
+# Starts backend service, dashboard, and optionally ngrok tunnels
+
+set -euo pipefail
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+SERVICE_USER="$SERVICE_USER"
+APP_DIR="$APP_DIR"
+DASHBOARD_DIR="$DASHBOARD_DIR"
+ENV_FILE="$GLOBAL_ENV_FILE"
+INSTALL_NGROK="$INSTALL_NGROK"
+
+print_status() {
+    echo -e "\${GREEN}➤\${NC} \$1"
+}
+
+print_warning() {
+    echo -e "\${YELLOW}⚠️\${NC} \$1"
+}
+
+print_error() {
+    echo -e "\${RED}❌\${NC} \$1"
+}
+
+# Check if running as correct user
+if [[ \$(whoami) != "\$SERVICE_USER" ]]; then
+   print_error "This script should be run as user: \$SERVICE_USER"
+   echo "Current user: \$(whoami)"
+   exit 1
 fi
 
-# Create environment file template
-ENV_FILE="$CONFIG_DIR/environment"
-if [ ! -f "$ENV_FILE" ]; then
-    echo -e "  ${YELLOW}▶${NC} Creating environment configuration template..."
+# Check if environment file exists
+if [ ! -f "\$ENV_FILE" ]; then
+    print_error "Environment file not found: \$ENV_FILE"
+    echo "Please run the installation script first."
+    exit 1
+fi
+
+# Source environment variables
+source "\$ENV_FILE"
+
+echo -e "\${BLUE}🚀 Starting Gemini Coding Factory...\${NC}"
+echo
+
+# Start Redis if not running
+print_status "Checking Redis service..."
+if ! systemctl is-active --quiet redis; then
+    print_warning "Redis not running, starting it..."
+    sudo systemctl start redis
+fi
+
+# Start backend service
+print_status "Starting backend service..."
+sudo systemctl enable gemini-coding-factory.service
+sudo systemctl start gemini-coding-factory.service
+
+# Wait a moment for service to start
+sleep 2
+
+# Check service status
+if systemctl is-active --quiet gemini-coding-factory.service; then
+    echo -e "  \${GREEN}✓\${NC} Backend service started successfully"
+else
+    print_error "Failed to start backend service"
+    echo "Check logs with: sudo journalctl -u gemini-coding-factory.service -f"
+    exit 1
+fi
+
+# Start dashboard in tmux session
+print_status "Starting dashboard in tmux session..."
+cd "\$DASHBOARD_DIR"
+
+# Kill existing dashboard session if it exists
+tmux kill-session -t gemini-dashboard 2>/dev/null || true
+
+# Start new dashboard session
+tmux new-session -d -s gemini-dashboard -c "\$DASHBOARD_DIR" "npm run dev"
+
+echo -e "  \${GREEN}✓\${NC} Dashboard started in tmux session 'gemini-dashboard'"
+echo -e "  \${BLUE}ℹ️\${NC}  Access dashboard at: http://localhost:\${DASHBOARD_PORT:-3000}"
+
+# Start ngrok tunnels if enabled
+if [ "\$INSTALL_NGROK" = "true" ] && command -v ngrok &> /dev/null; then
+    print_status "Starting ngrok tunnels..."
     
-    # Use the API key if provided during setup, otherwise use placeholder
-    API_KEY_VALUE="${TEMP_API_KEY:-your_gemini_api_key_here}"
+    # Kill existing ngrok sessions
+    tmux kill-session -t ngrok-backend 2>/dev/null || true
+    tmux kill-session -t ngrok-dashboard 2>/dev/null || true
     
-    sudo tee "$ENV_FILE" > /dev/null << EOL
-# Gemini Coding Factory Environment Configuration
-# Edit this file with your actual values
-
-# Required: Gemini API Key from Google AI Studio or Vertex AI
-GEMINI_API_KEY=$API_KEY_VALUE
-
-# Required: GitHub Personal Access Token with repo access
-GITHUB_TOKEN=your_github_token_here
-
-# Optional: Webhook secret for GitHub webhooks (recommended)
-WEBHOOK_SECRET=your_webhook_secret_here
-
-# Optional: Authorized users (comma-separated GitHub usernames)
-AUTHORIZED_USERS=$SERVICE_USER
-
-# Optional: CORS origins (comma-separated)
-CORS_ORIGINS=*
-
-# Optional: Custom workspace location
-# WORKSPACE_ROOT=/home/$SERVICE_USER/coding-factory
-
-# Optional: Custom port (default: 3000)
-# PORT=3000
-
-# Optional: Log level (debug, info, warn, error)
-# LOG_LEVEL=info
-EOL
-    run_quiet_command "sudo chown '$SERVICE_USER:$SERVICE_GROUP' '$ENV_FILE'" "Setting file ownership"
-    run_quiet_command "sudo chmod 600 '$ENV_FILE'" "Setting secure file permissions"
-    echo -e "  ${GREEN}✓${NC} Environment configuration template created"
+    # Start backend ngrok tunnel
+    tmux new-session -d -s ngrok-backend "ngrok http \${PORT:-5000}"
     
-    if [ -n "${TEMP_API_KEY:-}" ]; then
-        print_success "✅ Gemini API key has been added to the service configuration"
-    else
-        echo
-        print_warning "⚠️  IMPORTANT: Edit $ENV_FILE with your actual API keys!"
+    # Start dashboard ngrok tunnel  
+    tmux new-session -d -s ngrok-dashboard "ngrok http \${DASHBOARD_PORT:-3000}"
+    
+    echo -e "  \${GREEN}✓\${NC} ngrok tunnels started"
+    echo -e "  \${BLUE}ℹ️\${NC}  Backend tunnel: tmux attach -t ngrok-backend"
+    echo -e "  \${BLUE}ℹ️\${NC}  Dashboard tunnel: tmux attach -t ngrok-dashboard"
+    
+    # Wait a moment for ngrok to start
+    sleep 3
+    
+    # Try to get ngrok URLs
+    echo
+    print_status "Getting ngrok URLs..."
+    
+    # Get backend URL
+    BACKEND_URL=\$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o 'https://[^"]*\.ngrok-free\.app' | head -1)
+    if [ -n "\$BACKEND_URL" ]; then
+        echo -e "  \${GREEN}🌐\${NC} Backend webhook URL: \$BACKEND_URL/webhook"
+        echo -e "  \${YELLOW}📝\${NC} Add this to your GitHub repository webhooks"
+    fi
+    
+    # Get dashboard URL  
+    DASHBOARD_URL=\$(curl -s http://localhost:4041/api/tunnels 2>/dev/null | grep -o 'https://[^"]*\.ngrok-free\.app' | head -1)
+    if [ -n "\$DASHBOARD_URL" ]; then
+        echo -e "  \${GREEN}🎯\${NC} Public dashboard URL: \$DASHBOARD_URL"
     fi
 fi
+
+echo
+echo -e "\${GREEN}🎉 Gemini Coding Factory started successfully!\${NC}"
+echo
+echo -e "\${BLUE}📊 Service Status:\${NC}"
+echo -e "  • Backend service: \$(systemctl is-active gemini-coding-factory.service)"
+echo -e "  • Redis service: \$(systemctl is-active redis)"
+echo -e "  • Dashboard: http://localhost:\${DASHBOARD_PORT:-3000}"
+if [ "\$INSTALL_NGROK" = "true" ]; then
+    echo -e "  • ngrok tunnels: Running in tmux sessions"
+fi
+
+echo
+echo -e "\${BLUE}🔧 Useful commands:\${NC}"
+echo -e "  • View backend logs: sudo journalctl -u gemini-coding-factory.service -f"
+echo -e "  • Attach to dashboard: tmux attach -t gemini-dashboard"
+if [ "\$INSTALL_NGROK" = "true" ]; then
+    echo -e "  • View backend tunnel: tmux attach -t ngrok-backend"
+    echo -e "  • View dashboard tunnel: tmux attach -t ngrok-dashboard"
+fi
+echo -e "  • Stop all: ./stop-gemini-factory.sh"
+
+echo
+echo -e "\${YELLOW}💡 Next steps:\${NC}"
+if [ "\$INSTALL_NGROK" = "true" ] && [ -n "\${BACKEND_URL:-}" ]; then
+    echo -e "  1. Add webhook URL to GitHub: \$BACKEND_URL/webhook"
+else
+    echo -e "  1. Add webhook URL to GitHub: http://your-server-ip:5000/webhook"
+fi
+echo -e "  2. Comment '@gemini [your request]' on any GitHub PR"
+echo -e "  3. Monitor dashboard for job progress"
+EOL
+
+# Create stop script as well
+STOP_SCRIPT="/home/$SERVICE_USER/stop-gemini-factory.sh"
+cat > "$STOP_SCRIPT" << EOL
+#!/bin/bash
+
+# Gemini Coding Factory Stop Script
+
+set -euo pipefail
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "\${YELLOW}🛑 Stopping Gemini Coding Factory...\${NC}"
+
+# Stop backend service
+echo -e "  Stopping backend service..."
+sudo systemctl stop gemini-coding-factory.service
+
+# Stop tmux sessions
+echo -e "  Stopping tmux sessions..."
+tmux kill-session -t gemini-dashboard 2>/dev/null || true
+tmux kill-session -t ngrok-backend 2>/dev/null || true
+tmux kill-session -t ngrok-dashboard 2>/dev/null || true
+
+echo -e "\${GREEN}✅ All services stopped\${NC}"
+EOL
+
+# Make scripts executable
+chmod +x "$START_SCRIPT"
+chmod +x "$STOP_SCRIPT"
+
+echo -e "  ${GREEN}✓${NC} Unified start script created: $START_SCRIPT"
+echo -e "  ${GREEN}✓${NC} Stop script created: $STOP_SCRIPT"
 
 print_step "Setting up systemd service..."
 
@@ -493,9 +987,9 @@ print_step "Setting up firewall rules (if UFW is enabled)..."
 
 if command -v ufw &> /dev/null && sudo ufw status | grep -q "Status: active"; then
     print_separator "Configuring UFW Firewall"
-    print_warning "UFW firewall is active. Opening port 3000..."
-    run_command "sudo ufw allow 3000/tcp" "Opening port 3000 for HTTP traffic"
-    print_success "Port 3000 opened in firewall"
+    print_warning "UFW firewall is active. Opening port 5000..."
+    run_command "sudo ufw allow 5000/tcp" "Opening port 5000 for HTTP traffic"
+    print_success "Port 5000 opened in firewall"
 else
     echo -e "  ${BLUE}ℹ️${NC}  UFW firewall not active or not installed"
 fi
@@ -504,48 +998,47 @@ echo
 print_separator "🎉 Installation Complete!"
 echo -e "${GREEN}✅ Installation completed successfully!${NC}"
 echo
-echo -e "${BLUE}🔧 Next steps:${NC}"
-
-# Check if Gemini CLI was configured
-if [ -n "${TEMP_API_KEY:-}" ]; then
-    echo -e "✅ Gemini CLI configured during installation"
-else
-    echo -e "⚠️  ${YELLOW}Gemini CLI setup incomplete${NC}"
-    echo "   Run the installation script again to complete CLI setup"
+echo -e "${BLUE}🔧 Quick Start:${NC}"
+echo
+echo "1. Start everything with one command:"
+echo -e "   ${GREEN}./start-gemini-factory.sh${NC}"
+echo
+echo "2. Stop everything:"
+echo -e "   ${GREEN}./stop-gemini-factory.sh${NC}"
+echo
+echo -e "${BLUE}📁 Configuration:${NC}"
+echo -e "• Environment file: ${GLOBAL_ENV_FILE}"
+echo -e "• Start script: $START_SCRIPT"
+echo -e "• Stop script: $STOP_SCRIPT"
+echo
+if [ "$INSTALL_NGROK" = "true" ]; then
+    echo -e "${BLUE}🌐 ngrok Integration:${NC}"
+    echo -e "• ngrok will automatically start tunnels for both backend and dashboard"
+    echo -e "• Webhook URLs will be displayed when you start the service"
+    echo -e "• Access tunnels with: tmux attach -t ngrok-backend"
     echo
 fi
-
-echo "1. Edit the configuration file with your API keys:"
-echo "   sudo nano $ENV_FILE"
+echo -e "${BLUE}📊 Access Points:${NC}"
+echo -e "• Backend API: http://localhost:5000"
+echo -e "• Dashboard: http://localhost:3000"
+echo -e "• Health check: http://localhost:5000/health"
+echo -e "• Webhook endpoint: http://localhost:5000/webhook"
 echo
-echo "2. Get your API keys:"
-echo "   • Gemini API: https://aistudio.google.com/app/apikey"
-echo "   • GitHub Token: https://github.com/settings/tokens"
+echo -e "${BLUE}🔧 Manual Control (if needed):${NC}"
+echo -e "• Backend service: sudo systemctl start/stop gemini-coding-factory.service"
+echo -e "• View backend logs: sudo journalctl -u gemini-coding-factory.service -f"
+echo -e "• Attach to dashboard: tmux attach -t gemini-dashboard"
+echo -e "• Redis service: sudo systemctl start/stop redis"
 echo
-echo "3. Enable and start the service:"
-echo "   sudo systemctl enable gemini-coding-factory.service"
-echo "   sudo systemctl start gemini-coding-factory.service"
+echo -e "${YELLOW}⚠️  Final Notes:${NC}"
+if [ -z "${github_token:-}" ] || [ "$github_token" = "your_github_token_here" ]; then
+    echo -e "• ${RED}IMPORTANT:${NC} Add your GitHub token to: $GLOBAL_ENV_FILE"
+fi
+echo -e "• Add webhook URL to your GitHub repositories"
+if [ "$INSTALL_NGROK" = "false" ]; then
+    echo -e "• Ensure port 5000 is accessible from GitHub (or use ngrok)"
+fi
+echo -e "• Monitor dashboard for job progress and logs"
 echo
-echo "4. Check service status:"
-echo "   sudo systemctl status gemini-coding-factory.service"
-echo
-echo "5. View logs:"
-echo "   sudo journalctl -u gemini-coding-factory.service -f"
-echo
-echo "6. Set up GitHub webhooks pointing to:"
-echo "   http://your-server-ip:3000/webhook"
-echo
-echo -e "${BLUE}📡 Service endpoints:${NC}"
-echo "• Health check: http://localhost:3000/health"
-echo "• Status: http://localhost:3000/status"
-echo "• Webhook: http://localhost:3000/webhook"
-echo
-echo -e "${YELLOW}⚠️  Remember to:${NC}"
-echo "• Gemini CLI should be configured during installation"
-echo "• Add webhook URLs to your GitHub repositories"
-echo "• Ensure port 3000 is accessible from GitHub"
-echo "• Monitor logs for any issues"
-echo "• Log out and back in if Docker group was added"
-echo
-echo -e "${GREEN}🎉 Your Gemini Coding Factory is ready!${NC}"
+echo -e "${GREEN}🎉 Installation complete!${NC}"
 echo -e "${BLUE}💡 Usage: Comment '@gemini [your request]' on any GitHub PR${NC}" 

@@ -16,11 +16,11 @@ services:
       # Playwright cache
       - playwright_cache:/home/gemini/.cache/ms-playwright
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-5000}:5000"
     environment:
       - NODE_ENV=production
       - WORKSPACE_ROOT=/workspace
-      - PORT=3000
+      - PORT=5000
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
@@ -30,7 +30,7 @@ services:
     networks:
       - gemini-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,11 +48,11 @@ services:
       - node_modules_dev:/app/node_modules
       - playwright_cache:/home/gemini/.cache/ms-playwright
     ports:
-      - "3001:3000"
+      - "5001:5000"
     environment:
       - NODE_ENV=development
       - WORKSPACE_ROOT=/workspace
-      - PORT=3000
+      - PORT=5000
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}

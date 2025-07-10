@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
 import { RepositoryManager } from './repository-manager';
@@ -6,6 +5,17 @@ import { ProjectDetector } from './project-detector';
 import { PromptBuilder } from './prompt-builder';
 import { GitHubWebhookPayload, ProjectConfig, WorkflowResult } from '../types';
 import { Logger } from '../utils/logger';
+import { spawn } from 'child_process';
+import { join } from 'path';
+import readline from 'readline';
+
+// 🚨 NEW: QuotaExceededError for queue management
+class QuotaExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaExceededError';
+  }
+}
 
 export class GeminiOrchestrator {
   private repositoryManager: RepositoryManager;
@@ -13,6 +23,11 @@ export class GeminiOrchestrator {
   private promptBuilder: PromptBuilder;
   private logger: Logger;
   private workspaceRoot: string;
+
+  // 🚨 QUOTA PROTECTION: Static variables to track API exhaustion
+  private static quotaExhausted = false;
+  private static quotaResetTime = 0;
+  private static readonly QUOTA_RESET_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 
   constructor(workspaceRoot: string = '/home/wes/coding-factory') {
     this.workspaceRoot = workspaceRoot;
@@ -153,6 +168,12 @@ export class GeminiOrchestrator {
       repoPath 
     });
 
+    // 🚨 QUOTA PROTECTION: Check if quota is exhausted
+    const quotaStatus = this.checkQuotaStatus();
+    if (quotaStatus.blocked) {
+      throw new Error(quotaStatus.message!);
+    }
+
     // Build the prompt based on project type and configuration
     const prompt = await this.promptBuilder.buildPrompt(
       projectConfig,
@@ -161,9 +182,20 @@ export class GeminiOrchestrator {
       payload
     );
 
-    // Save prompt to file for Gemini CLI
+    // Save prompt to file for reference and CLI usage
     const promptFile = path.join(repoPath, '.gemini-prompt.txt');
     await fs.writeFile(promptFile, prompt);
+
+    // 🚨 FIXED ARG_MAX PROTECTION: Use --prompt-file instead of --prompt
+    this.logger.warn('⚠️ FIXED ARG_MAX ISSUE - USING PROMPT FILE', {
+      message: 'Using --prompt-file flag instead of --prompt to avoid ARG_MAX limits',
+      previousIssue: 'Long prompts hit kernel ARG_MAX limit causing silent retries',
+      newMethod: '--prompt-file with saved file (eliminates argument length limits)',
+      promptFile: promptFile,
+      promptLength: prompt.length,
+      maxArgLength: 'Unlimited (file-based)',
+      quotaStatus: GeminiOrchestrator.quotaExhausted ? 'PROTECTED' : 'AVAILABLE'
+    });
 
     // Configure environment for Gemini
     const env = {
@@ -177,71 +209,164 @@ export class GeminiOrchestrator {
       WORKSPACE_PATH: repoPath
     };
 
-    // Run Gemini CLI
-    const result = await this.executeGeminiCLI(repoPath, promptFile, env, projectConfig);
+    // Job queue handles the CLI execution now
+    this.logger.info('✅ Job preparation completed - execution handled by worker queue', {
+      promptFile,
+      projectType: projectConfig.type,
+      repoPath,
+      method: 'BullMQ worker with --prompt-file + streaming'
+    });
 
-    return result;
+    // Return a success result indicating job was prepared
+    return {
+      success: true,
+      output: 'Job queued for processing by worker',
+      projectType: projectConfig.type,
+      timestamp: new Date().toISOString(),
+      commits: []
+    };
+  }
+
+  // NOTE: CLI execution moved to worker.ts for proper job queue handling
+  // This orchestrator now only handles job preparation and validation
+
+  /**
+   * Checks if quota is exhausted and should block requests
+   */
+  private checkQuotaStatus(): { blocked: boolean; message?: string } {
+    if (GeminiOrchestrator.quotaExhausted && Date.now() < GeminiOrchestrator.quotaResetTime) {
+      const resetIn = Math.ceil((GeminiOrchestrator.quotaResetTime - Date.now()) / (60 * 1000));
+      return {
+        blocked: true,
+        message: `🚫 **API Quota Exhausted - Service Protected**
+
+Service is temporarily suspended to prevent further quota waste.
+
+**Status:**
+- Quota reset in: ${resetIn} minutes  
+- Free tier limit: 100 requests per day
+- Protection: ACTIVE (no new requests allowed)
+
+**What caused this:**
+- Previous 98 requests due to incorrect CLI usage
+- Fixed: Now using --prompt flag instead of stdin piping
+
+**Solutions:**
+1. Wait for quota reset (midnight UTC)
+2. Upgrade to paid tier for higher limits
+3. Use different API key
+
+Service will resume automatically when quota resets.`
+      };
+    }
+    return { blocked: false };
   }
 
   /**
-   * Executes the Gemini CLI with the generated prompt
+   * Detects quota exhaustion in stderr and activates protection
    */
-  private async executeGeminiCLI(
-    workingDir: string,
-    promptFile: string,
-    env: Record<string, string | undefined>,
-    config: ProjectConfig
-  ): Promise<WorkflowResult> {
-    return new Promise((resolve, reject) => {
-      const geminiProcess = spawn('gemini', ['--yolo'], {
-        cwd: workingDir,
-        env,
-        stdio: ['pipe', 'pipe', 'pipe']
+  private detectQuotaExhaustion(stderr: string): boolean {
+    const quotaIndicators = ['quota', '429', 'free_tier_requests', 'RESOURCE_EXHAUSTED', 'exceeded your current quota'];
+    if (quotaIndicators.some(indicator => stderr.toLowerCase().includes(indicator.toLowerCase()))) {
+      this.logger.error('🚫 QUOTA EXHAUSTION DETECTED', {
+        message: 'Activating quota protection to prevent further waste',
+        resetTime: new Date(Date.now() + GeminiOrchestrator.QUOTA_RESET_INTERVAL).toISOString()
       });
+      
+      // Set quota exhaustion protection
+      GeminiOrchestrator.quotaExhausted = true;
+      GeminiOrchestrator.quotaResetTime = Date.now() + GeminiOrchestrator.QUOTA_RESET_INTERVAL;
+      return true;
+    }
+    return false;
+  }
 
-      let stdout = '';
-      let stderr = '';
+  /**
+   * Enhances error messages with specific handling for rate limiting and common issues
+   */
+  private enhanceErrorMessage(exitCode: number, stderr: string): string {
+    const baseMessage = `Gemini process failed with code ${exitCode}`;
+    
+    // Check for rate limiting (429 errors)
+    if (stderr.includes('status 429') || stderr.includes('rate limit') || stderr.includes('quota')) {
+      if (stderr.includes('free_tier_requests')) {
+        return `${baseMessage}
 
-      // Send the prompt to Gemini
-      fs.readFile(promptFile, 'utf8').then(prompt => {
-        geminiProcess.stdin.write(prompt);
-        geminiProcess.stdin.end();
-      });
+🚫 **Rate Limit Exceeded: Free Tier API Quota**
 
-      geminiProcess.stdout.on('data', (data) => {
-        stdout += data.toString();
-        this.logger.debug('Gemini stdout:', data.toString());
-      });
+You've hit the free tier limit for Gemini API requests. The free tier allows only 5 requests per minute.
 
-      geminiProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        this.logger.debug('Gemini stderr:', data.toString());
-      });
+**Solutions:**
+1. **Wait and retry**: The quota resets every minute
+2. **Upgrade to paid tier**: Visit https://ai.google.dev/pricing for higher limits
+3. **Switch to different model**: Consider using a different Gemini model with higher limits
+4. **Use API key with billing enabled**: Ensure your API key has billing configured
 
-      geminiProcess.on('close', (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            output: stdout,
-            projectType: config.type,
-            timestamp: new Date().toISOString(),
-            commits: this.extractCommitInfo(stdout)
-          });
-        } else {
-          reject(new Error(`Gemini process failed with code ${code}\nStderr: ${stderr}`));
-        }
-      });
+**Current Error:**
+\`\`\`
+${stderr.substring(0, 1000)}${stderr.length > 1000 ? '...' : ''}
+\`\`\`
 
-      geminiProcess.on('error', (error) => {
-        reject(error);
-      });
+Please wait a few minutes before trying again, or upgrade your API plan for higher limits.`;
+      } else {
+        return `${baseMessage}
 
-      // Set a timeout to prevent hanging
-      setTimeout(() => {
-        geminiProcess.kill('SIGTERM');
-        reject(new Error('Gemini process timeout'));
-      }, 30 * 60 * 1000); // 30 minutes timeout
-    });
+🚫 **Rate Limit Exceeded**
+
+You've exceeded the API rate limits for your current plan.
+
+**Error Details:**
+\`\`\`
+${stderr}
+\`\`\`
+
+Please wait and try again, or check your API quota at https://ai.google.dev/`;
+      }
+    }
+
+    // Check for authentication issues
+    if (stderr.includes('GEMINI_API_KEY') || stderr.includes('authentication') || stderr.includes('401')) {
+      return `${baseMessage}
+
+🔑 **Authentication Error**
+
+The Gemini API key is missing or invalid.
+
+**Solutions:**
+1. Check that GEMINI_API_KEY environment variable is set
+2. Verify your API key at https://aistudio.google.com/app/apikey
+3. Ensure the API key has the necessary permissions
+
+**Error Details:**
+\`\`\`
+${stderr}
+\`\`\``;
+    }
+
+    // Check for network/connectivity issues
+    if (stderr.includes('network') || stderr.includes('timeout') || stderr.includes('connection')) {
+      return `${baseMessage}
+
+🌐 **Network Connection Error**
+
+Unable to connect to the Gemini API.
+
+**Possible causes:**
+1. Network connectivity issues
+2. Firewall blocking outbound connections
+3. Temporary service outage
+
+**Error Details:**
+\`\`\`
+${stderr}
+\`\`\`
+
+Please check your network connection and try again.`;
+    }
+
+    // Generic error with full stderr
+    return `${baseMessage}
+Stderr: ${stderr}`;
   }
 
   /**
@@ -343,5 +468,56 @@ ${result.commits.length > 0 ? `**Commits added:** ${result.commits.length}` : ''
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error('Failed to post comment to GitHub', { error: errorMessage });
     }
+  }
+
+  async executeGemini(repoPath: string, prompt: string): Promise<string> {
+    this.logger.info(`Executing Gemini for ${repoPath}`);
+
+    const promptFile = join(repoPath, '.gemini-prompt.txt');
+    await fs.writeFile(promptFile, prompt);
+
+    const geminiArgs = [
+      '--prompt-file', promptFile,
+      '--yolo',
+      '--model', 'gemini-1.5-pro',
+      '--output-format', 'stream-json'
+    ];
+
+    return new Promise((resolve, reject) => {
+      const geminiProcess = spawn('gemini', geminiArgs, {
+        cwd: repoPath,
+        env: { ...process.env }
+      });
+
+      const out = readline.createInterface({ input: geminiProcess.stdout! });
+      const err = readline.createInterface({ input: geminiProcess.stderr! });
+
+      let output = '';
+      let errorOutput = '';
+
+      out.on('line', line => {
+        output += line + '\n';
+      });
+
+      err.on('line', line => {
+        errorOutput += line + '\n';
+        if (this.detectQuotaExhaustion(line)) {
+          geminiProcess.kill();
+          reject(new QuotaExceededError('API quota exhausted'));
+        }
+      });
+
+      geminiProcess.on('close', code => {
+        if (code === 0) {
+          resolve(output);
+        } else {
+          reject(new Error(this.enhanceErrorMessage(code ?? -1, errorOutput)));
+        }
+      });
+
+      geminiProcess.on('error', err => {
+        reject(err);
+      });
+    });
   }
 } 

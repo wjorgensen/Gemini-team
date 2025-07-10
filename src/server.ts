@@ -26,7 +26,7 @@ async function main() {
 
     // Configuration
     const workspaceRoot = process.env.WORKSPACE_ROOT || '/home/wes/coding-factory';
-    const port = parseInt(process.env.PORT || process.env.WEBHOOK_PORT || '3000');
+    const port = parseInt(process.env.PORT || process.env.WEBHOOK_PORT || '5000');
     const webhookPath = process.env.WEBHOOK_PATH || '/webhook';
     const webhookSecret = process.env.WEBHOOK_SECRET;
     

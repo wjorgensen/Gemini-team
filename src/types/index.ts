@@ -1,5 +1,6 @@
 // GitHub Webhook Types
 export interface GitHubWebhookPayload {
+  action?: string; // 'created', 'edited', 'deleted' for comment events
   repository: {
     full_name: string;
     clone_url: string;

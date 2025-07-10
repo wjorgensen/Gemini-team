@@ -20,11 +20,11 @@ SyslogIdentifier=gemini-factory
 # Environment variables
 Environment=NODE_ENV=production
 Environment=WORKSPACE_ROOT=/home/wes/coding-factory
-Environment=PORT=3000
+Environment=PORT=5000
 Environment=LOG_LEVEL=info
 
 # Environment file for secrets
-EnvironmentFile=-/etc/gemini-coding-factory/environment
+EnvironmentFile=-/home/wes/.gemini/.env
 
 # Security settings - Relaxed for development service that needs git/npm access
 NoNewPrivileges=true
